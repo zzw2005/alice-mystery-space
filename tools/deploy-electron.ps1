@@ -71,7 +71,7 @@ if ($Asset) {
         Copy-Item -LiteralPath $assetTarget -Destination $assetBackup
         Copy-Item -LiteralPath $assetSource -Destination $assetStage
         if ((Get-FileHash -LiteralPath $assetStage).Hash -ne $assetHash) { throw "Staged hash mismatch: $Asset" }
-        [IO.File]::Replace($assetStage, $assetTarget, $null)
+        [IO.File]::Replace($assetStage, $assetTarget)
         if ((Get-FileHash -LiteralPath $assetTarget).Hash -ne $assetHash) { throw "Target hash mismatch: $Asset" }
         Write-Output "[2/4] Launch AlicePetLaunch and require fresh video/heartbeat"
         & schtasks.exe /run /tn AlicePetLaunch
