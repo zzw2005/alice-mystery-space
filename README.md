@@ -1,6 +1,6 @@
 # 艾莉丝的神秘空间
 
-> 当前重建线：Electron＋TypeScript＋原生 video VP9-alpha，正式源位于 `AliceButler/electron/`。旧 WinForms `pet*.cs` 与旧动画保留归档，不删除。新素材只加工 `clips-green/v2/` 的绿幕视频，不转换旧 22 段；素材与接缝限制见 `docs/green-assets-validation.md`。重建范围与待确认重产清单见 `docs/electron-rebuild.md`，开发/打包见 `AliceButler/electron/README.md`。下方旧 WinForms 架构和黑底流程为历史记录，不再用于本次新动画。
+> 当前重建线：Electron＋TypeScript＋原生 video VP9-alpha，正式源位于 `AliceButler/electron/`。旧 WinForms `pet*.cs` 保留为归档源码；旧动作帧与黑底源视频已按主线 `4c43f67` 全量删除。新素材只加工 `clips-green/v2/` 的绿幕视频；素材与接缝限制见 `docs/green-assets-validation.md`，开发/打包见 `AliceButler/electron/README.md`。下方旧 WinForms 架构和黑底流程为历史记录，不再用于当前动作。
 
 新部署入口仍为 `tools/deploy-pet.sh`，调用 `deploy-electron.ps1` 校验完整包、备份覆盖文件、启动既有 AlicePetLaunch 并检查冒烟 done 回执。exe 沿用 AlicePetNew.exe；runner/watchdog/计划任务与 ACL 不变。旧部署脚本归档于 `tools/archive/deploy-pet-winforms.sh`。
 
@@ -16,13 +16,10 @@
 
 | 路径 | 内容 |
 |---|---|
-| `AliceButler/` | **部署源（唯一权威）**：桌宠 C# 源码（pet.cs ＋ 6 个 partial）、runner.js、watchdog.js、四份架构文档（ARCHITECTURE / MODULE-MAP / PROTOCOL / CHANGE-DISCIPLINE）、butler-config.json、assets/ 全部动画帧 |
-| `AliceButler/assets/anim60/` | 60 帧动画 15 段（视频管线产物，400×462） |
-| `AliceButler/assets/anim-flat/` | 扁平风动画 12 段（520×600 / 400×462） |
-| `AliceButler/assets/sprites/` | 精灵图动画 4 段（呼吸/走路/打盹/爱心） |
-| `clips-flat2/` | anim60 的源视频（黑底） |
-| `clips/`、`clips-flat/`、`clips60/` | 其余各批动画源视频 |
-| `sprite-frames/` | 精灵图源帧 |
+| `AliceButler/electron/` | **当前播放器**：Electron/TypeScript 源码、九段正式动作配置、测试与 640×360 VP9-alpha WebM |
+| `AliceButler/` | 管家、看门狗、部署兼容文件；旧 WinForms `pet*.cs` 保留为归档源码 |
+| `AliceButler/assets/` | 仅保留头像与静态形象图；旧 `anim/`、`anim-flat/`、`anim60/`、`sprites/` 已删除 |
+| `clips-green/v2/` | 九段正式绿幕源视频与锚图 |
 | `process60.py`、`process60b.py` | 60 帧管线：抽帧→minterpolate 插帧→抠像→归一化 |
 | `process_clips.py`、`process_clips_flat.py`、`process_clips_flat2.py` | 扁平风动画管线 |
 | `rekey_all.py` | **黑底重抠像**（见下方红线） |
@@ -41,7 +38,7 @@
 4. `idle`、`walk`、`doze` 循环片必须通过解码后首尾 RGBA 完全一致检查；每段还必须通过逐帧 alpha 存在、不透明纯黑 <5% 和 640×360/24fps 检查。逐段结果写入 `docs/green-assets-validation/<name>.json`。
 5. 动作池、权重和点击防连抽只在 `AliceButler/electron/config.json` 接线；缺动作等待艾莉丝后续入仓，不自行生成视频。
 
-旧 `AliceButler/assets/anim60/`、`anim-flat/`、`sprites/` 与下方黑底管线是历史 WinForms 资料，仅供归档与回滚，不是当前正式动作来源。
+旧动画目录及黑底源视频目录已经删除，不再从本仓恢复。文末遗留的 WinForms/黑底说明只记录历史，不是当前动作来源。
 
 ## 部署
 

@@ -29,4 +29,4 @@ motion/anim 定时器 16ms；StatusTick 2s；钩子轮询 5s；桌宠 outbox 轮
 
 ## 部署源与运行副本
 
-唯一源头在 VM：~/workspace/butler-build/AliceButler/（pet*.cs、runner.js、watchdog.js、本组文档）。PC 上的同名文件是运行副本，禁止直接改 PC 副本。素材在 assets/（sprites/anim60/anim-flat），部署走 deploy-pet.sh --assets。
+仓库中的 `AliceButler/` 是源码唯一权威；PC 上的同名文件是运行副本，禁止直接改 PC 副本。旧 WinForms/黑底动画目录已删除，当前正式动作位于 `AliceButler/electron/media/`，部署只走 `tools/deploy-pet.sh`。
