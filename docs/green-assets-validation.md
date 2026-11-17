@@ -17,6 +17,10 @@ restore the legacy 22 animations, and it did not generate any video.
 - Every frame in one clip uses the same affine transform. The width comes from
   the source pose and aspect ratio; the pipeline does not stretch the Q-style
   body horizontally.
+- Sleep source v5 comes from mainline `4b1a5da`. After keying and canvas
+  normalization, the same 24-frame anchors are applied: `sleepstart` tail to
+  `doze` first, `wakeup` head to `doze` last, and `wakeup` tail to `idle`
+  first. Sleep segments use lossless VP9 to preserve those endpoint anchors.
 - `idle`, `walk`, and `doze` have identical decoded first/last RGBA frames.
   Non-loop clips intentionally retain their action endpoints.
 - All decoded frames contain alpha. Opaque pure black is below 5% in every
@@ -34,9 +38,9 @@ Percentages are calculated from the 640x360 frame using alpha > 32.
 | clickhappy | once | 221, 61, 432, 306 | 34.53% | 67.50% | 16.94% | 85.00% | 32.97% | 68.06% | 51.02% | 823,553 |
 | clickshy | once | 223, 61, 430, 306 | 34.84% | 67.19% | 16.94% | 85.00% | 32.34% | 68.06% | 51.02% | 661,080 |
 | clicktsun | once | 223, 61, 430, 306 | 34.84% | 67.19% | 16.94% | 85.00% | 32.34% | 68.06% | 51.02% | 712,291 |
-| sleepstart | once | 222, 61, 432, 306 | 34.69% | 67.50% | 16.94% | 85.00% | 32.81% | 68.06% | 51.09% | 594,350 |
+| sleepstart | once | 222, 61, 431, 306 | 34.69% | 67.34% | 16.94% | 85.00% | 32.66% | 68.06% | 51.02% | 4,542,496 |
 | doze | loop | 235, 119, 419, 306 | 36.72% | 65.47% | 33.06% | 85.00% | 28.75% | 51.94% | 51.09% | 4,271,743 |
-| wakeup | once | 235, 119, 419, 306 | 36.72% | 65.47% | 33.06% | 85.00% | 28.75% | 51.94% | 51.09% | 430,876 |
+| wakeup | once | 235, 119, 419, 306 | 36.72% | 65.47% | 33.06% | 85.00% | 28.75% | 51.94% | 51.09% | 4,056,911 |
 
 The first-frame height error against the requested calibration is 0.2 px for
 all nine clips. Standing horizontal-center error is at most 0.6 px. All
@@ -59,21 +63,19 @@ tested. The source clips themselves do not share exact boundary pixels:
 
 | Boundary | Exact | RGBA MAE | Changed channels |
 |---|---:|---:|---:|
-| sleepstart tail -> doze first | no | 10.4661 | 111,240 |
-| doze tail -> wakeup first | no | 0.5647 | 61,925 |
-| wakeup tail -> idle first | no | 14.3101 | 120,524 |
+| sleepstart tail -> doze first | no | 0.0943 | 59,733 |
+| doze tail -> wakeup first | no | 0.0943 | 59,733 |
+| wakeup tail -> idle first | no | 0.1359 | 91,252 |
 
-These measurements remain visible in the delivered sources: sleepstart's tail
-is not geometrically identical to doze's first pose, and wakeup's final
-standing scale differs from idle. The player keeps the action relay and its
-180 ms alpha crossfade, but this report does not claim pixel-perfect sleep
-transitions. Correcting those two boundaries requires new approved source
-video; the requested processing calibration cannot fix them without changing
-the character's scale or position.
+The remaining difference is YUVA420 color round-trip rounding: maximum channel
+delta is 11-13 although the normalized endpoint geometry is identical. This is
+below the mainline source seam measurements (0.99/1.57/1.51). The player keeps
+the 180 ms alpha crossfade as insurance; it is no longer required to hide a
+pose or scale discontinuity.
 
 ## Verification
 
-- `py -m unittest discover -s tests -p test_green_pipeline.py`: 3 passed.
+- `py -m unittest discover -s tests -p test_green_pipeline.py`: 5 passed.
 - Full decode of all nine WebMs: 240 frames each, 24 fps, 640x360, alpha
   present, and maximum opaque-black ratio below 5% per frame.
 - Electron integration, hidden windows with an isolated runtime directory:
@@ -82,6 +84,6 @@ the character's scale or position.
 - Player tests cover weighted non-repeating picks, idle-loop versus
   wave-one-shot behavior, click scheduling, sleep relay, and presence fallback.
 
-Total current video payload: 18,910,376 bytes (18.03 MiB). Loop clips use
-lossless VP9 plus explicit terminal key frames so their decoded endpoints are
-exactly equal; one-shot clips remain CRF 28.
+Total current video payload: 26,484,557 bytes (25.26 MiB). Loop clips and the
+two sleep-seam clips use lossless VP9 plus explicit endpoint key frames; other
+one-shot clips remain CRF 28.

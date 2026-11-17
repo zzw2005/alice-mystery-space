@@ -29,6 +29,7 @@ CLIPS = {
     "doze": ("sleep", True),
     "wakeup": ("sleep", False),
 }
+SLEEP_SEAM_FRAMES = 24
 TARGETS = {
     "standing": {"center": 0.51, "top": 0.17, "foot": 0.85, "height": 0.68},
     "sleep": {"center": 0.51, "top": 0.33, "foot": 0.85, "height": 0.52},
@@ -118,8 +119,68 @@ def normalize(rgba: np.ndarray, matrix: np.ndarray) -> np.ndarray:
     ).astype(np.uint8)
 
 
+def blend_premultiplied(source: np.ndarray, target: np.ndarray, weight: float) -> np.ndarray:
+    """Blend two RGBA frames without dark fringes at transparent edges."""
+    a = source.astype(np.float32) / 255
+    b = target.astype(np.float32) / 255
+    a[:, :, :3] *= a[:, :, 3:4]
+    b[:, :, :3] *= b[:, :, 3:4]
+    mixed = a * (1 - weight) + b * weight
+    alpha = np.clip(mixed[:, :, 3:4], 0, 1)
+    rgb = np.divide(
+        mixed[:, :, :3],
+        alpha,
+        out=np.zeros_like(mixed[:, :, :3]),
+        where=alpha > 0.001,
+    )
+    return np.round(
+        np.clip(np.concatenate((rgb, alpha), axis=2), 0, 1) * 255
+    ).astype(np.uint8)
+
+
+def anchor_sleep_frames(
+    name: str, frames: list[np.ndarray], idle_first: np.ndarray, doze_first: np.ndarray
+) -> list[np.ndarray]:
+    """Apply the mainline sleep anchors after keying and canvas normalization."""
+    out = list(frames)
+
+    def pull_tail(anchor: np.ndarray) -> None:
+        count = min(SLEEP_SEAM_FRAMES, len(out))
+        for i in range(len(out) - count, len(out)):
+            if count == 1:
+                weight = 1.0
+            else:
+                weight = (i - (len(out) - count)) / (count - 1)
+                weight = weight * weight * (3 - 2 * weight)
+            out[i] = blend_premultiplied(out[i], anchor, weight)
+        out[-1] = anchor.copy()
+
+    def pull_head(anchor: np.ndarray) -> None:
+        count = min(SLEEP_SEAM_FRAMES, len(out))
+        for i in range(count):
+            if count == 1:
+                weight = 1.0
+            else:
+                weight = 1 - i / (count - 1)
+                weight = weight * weight * (3 - 2 * weight)
+            out[i] = blend_premultiplied(out[i], anchor, weight)
+        out[0] = anchor.copy()
+
+    if name == "sleepstart":
+        pull_tail(doze_first)
+    elif name == "wakeup":
+        pull_head(doze_first)
+        pull_tail(idle_first)
+    return out
+
+
 def encode(
-    ffmpeg: str, frames: list[np.ndarray], fps: float, dest: Path, loop: bool
+    ffmpeg: str,
+    frames: list[np.ndarray],
+    fps: float,
+    dest: Path,
+    loop: bool,
+    lossless: bool,
 ) -> None:
     pending = dest.with_suffix(".tmp.webm")
     cmd = [
@@ -129,7 +190,7 @@ def encode(
         "-an", "-c:v", "libvpx-vp9", "-pix_fmt", "yuva420p",
         "-row-mt", "1", "-threads", "4", "-deadline", "good", "-cpu-used", "3",
     ]
-    if loop:
+    if loop or lossless:
         # Exact terminal frame plus an independent terminal key frame guarantees
         # a deterministic decoded loop point while retaining normal prediction.
         cmd += [
@@ -265,9 +326,13 @@ def process_clip(name: str, ffmpeg: str, output: Path, report_dir: Path) -> dict
     frames = [normalize(frame, matrix) for frame in keyed]
     if loop:
         frames[-1] = frames[0].copy()
+    if name in ("sleepstart", "wakeup"):
+        idle_ref = decode_frames(ffmpeg, output / "idle.webm")[0]
+        doze_ref = decode_frames(ffmpeg, output / "doze.webm")[0]
+        frames = anchor_sleep_frames(name, frames, idle_ref, doze_ref)
     output.mkdir(parents=True, exist_ok=True)
     dest = output / f"{name}.webm"
-    encode(ffmpeg, frames, fps, dest, loop)
+    encode(ffmpeg, frames, fps, dest, loop, loop or name in ("sleepstart", "wakeup"))
     metrics, first, last = inspect(ffmpeg, dest, calibration, loop)
     report = {
         "clip": name,

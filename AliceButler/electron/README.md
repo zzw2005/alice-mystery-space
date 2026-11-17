@@ -12,7 +12,7 @@ Node.js 24：`npm ci`（如环境全局禁止安装脚本，再执行 `node node
 
 `config.json` 是运行时动作配置，保存后约 2 秒重载；坏配置保留上一份有效配置并记录错误。idle/turn/drag/clicks/moves 各自权重抽选，多候选排除上次动作。待机池中的 `idle` 标为循环、`wave` 标为单次；三段点击共用 `clicks` 池。`provisional:true` 明确标注借用动作，尚不等于正式对应素材。
 
-`media/*.webm` 仅由仓内 `clips-green/v2/*.mp4` 加工。重跑 `py tools/process-green.py --ffmpeg <ffmpeg.exe> --clip <name>`（在仓库根目录），输出 640×360 VP9-alpha、保留源 24fps，不生成视频、不用旧帧。管线依赖 numpy、opencv-python、Pillow，ffmpeg 需要 libvpx-vp9。人物主连通域按站立 17%–85% 高 68%、睡姿 33%–85% 高 52%、中心 51% 固定对齐；Zzz 等分离特效保留但不参与身体包围盒。每帧检测透明通道与不透明纯黑 <5%；`idle`、`walk`、`doze` 还要求解码首尾 RGBA 完全一致。逐段数据见 `docs/green-assets-validation/<clip>.json` 与总表 `docs/green-assets-validation.md`。
+`media/*.webm` 仅由仓内 `clips-green/v2/*.mp4` 加工。重跑 `py tools/process-green.py --ffmpeg <ffmpeg.exe> --clip <name>`（在仓库根目录），输出 640×360 VP9-alpha、保留源 24fps，不生成视频、不用旧帧。管线依赖 numpy、opencv-python、Pillow，ffmpeg 需要 libvpx-vp9。人物主连通域按站立 17%–85% 高 68%、睡姿 33%–85% 高 52%、中心 51% 固定对齐；Zzz 等分离特效保留但不参与身体包围盒。每帧检测透明通道与不透明纯黑 <5%；`idle`、`walk`、`doze` 还要求解码首尾 RGBA 完全一致。睡眠三段在加工域复用主线 24 帧接缝锚定并用无损 VP9 编码。逐段数据见 `docs/green-assets-validation/<clip>.json` 与总表 `docs/green-assets-validation.md`。
 
 播放由两个原生 video 交替预载，收到首个可用帧后再切换，180ms 交叠；透明 alpha 读取只用于命中，不把视频改成散帧播放。透明区与脚下阴影穿透；角色可抓。DIP 坐标跟随 Electron DPI，镜像/挤压使用同一逆变换命中。
 

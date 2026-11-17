@@ -7,25 +7,27 @@
   ],
   "runtimeRelayTested": true,
   "crossfadeMs": 180,
+  "sourceMainlineCommit": "4b1a5da929f8db2cbfaca8ba37419ddf7aa8a9bc",
+  "anchorFrames": 24,
   "seams": {
     "sleepstart-doze": {
       "exact": false,
-      "rgbaMeanAbsoluteError": 10.466138237847222,
-      "maxChannelDelta": 255,
-      "changedChannels": 111240
+      "rgbaMeanAbsoluteError": 0.09425672743055556,
+      "maxChannelDelta": 11,
+      "changedChannels": 59733
     },
     "doze-wakeup": {
       "exact": false,
-      "rgbaMeanAbsoluteError": 0.5647352430555556,
-      "maxChannelDelta": 255,
-      "changedChannels": 61925
+      "rgbaMeanAbsoluteError": 0.09425672743055556,
+      "maxChannelDelta": 11,
+      "changedChannels": 59733
     },
     "wakeup-idle": {
       "exact": false,
-      "rgbaMeanAbsoluteError": 14.310123697916667,
-      "maxChannelDelta": 255,
-      "changedChannels": 120524
+      "rgbaMeanAbsoluteError": 0.13592881944444443,
+      "maxChannelDelta": 13,
+      "changedChannels": 91252
     }
   },
-  "note": "Runtime relay passes, but the approved source clips do not have exact boundary geometry. Replacing these sources is required for pixel-perfect sleep seams; processing must not alter character scale or position."
+  "note": "Mainline v5 sources carry endpoint anchors. The pipeline reapplies 24-frame anchors after keying and normalization and encodes the sleep segments losslessly. Normalized endpoint geometry matches; remaining MAE is YUVA420 color round-trip rounding. The 180 ms crossfade remains insurance."
 }

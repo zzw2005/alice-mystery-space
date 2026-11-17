@@ -34,6 +34,24 @@ class KeyTests(unittest.TestCase):
         )
         self.assertEqual(box["components"], 2)
 
+    def test_sleep_anchor_pins_both_wakeup_endpoints(self):
+        idle = np.zeros((4, 4, 4), np.uint8)
+        idle[1:3, 1:3] = [10, 20, 30, 255]
+        doze = np.zeros((4, 4, 4), np.uint8)
+        doze[2:4, 0:2] = [50, 60, 70, 255]
+        source = [np.zeros((4, 4, 4), np.uint8) for _ in range(30)]
+        anchored = green.anchor_sleep_frames("wakeup", source, idle, doze)
+        self.assertTrue(np.array_equal(anchored[0], doze))
+        self.assertTrue(np.array_equal(anchored[-1], idle))
+
+    def test_sleep_entry_anchor_pins_tail(self):
+        idle = np.zeros((4, 4, 4), np.uint8)
+        doze = np.zeros((4, 4, 4), np.uint8)
+        doze[1:3, 1:3] = [50, 60, 70, 255]
+        source = [np.zeros((4, 4, 4), np.uint8) for _ in range(30)]
+        anchored = green.anchor_sleep_frames("sleepstart", source, idle, doze)
+        self.assertTrue(np.array_equal(anchored[-1], doze))
+
 
 if __name__ == '__main__':
     unittest.main()
