@@ -8,6 +8,15 @@ Node.js 24：`npm ci`（如环境全局禁止安装脚本，再执行 `node node
 
 `npm run package` 输出 `release/AlicePetNew-win32-x64/`，包含 Chromium/Electron，完整安装体积会明显大于旧 WinForms；视频体积与程序体积分别统计，内存按 Electron 所有进程合计。生产不使用 node_modules 或 TS 编译器。
 
+部署后九段生产包点播检查：
+
+```powershell
+$env:ALICE_PET_EXECUTABLE = 'C:\ProgramData\AliceButler\AlicePetNew.exe'
+node tests/deployed-nine-clip-smoke.cjs
+```
+
+该检查用隔离的 `ALICE_PET_ROOT` 和隐藏窗口启动生产包，不会读写正式聊天通道。
+
 ## 动作与素材
 
 `config.json` 是运行时动作配置，保存后约 2 秒重载；坏配置保留上一份有效配置并记录错误。idle/turn/drag/clicks/moves 各自权重抽选，多候选排除上次动作。待机池中的 `idle` 标为循环、`wave` 标为单次；三段点击共用 `clicks` 池。`provisional:true` 明确标注借用动作，尚不等于正式对应素材。
