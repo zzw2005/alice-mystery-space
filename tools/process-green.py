@@ -30,6 +30,7 @@ CLIPS = {
     "wakeup": ("sleep", False),
 }
 SLEEP_SEAM_FRAMES = 24
+SLEEP_SEAM_CRF = 24
 TARGETS = {
     "standing": {"center": 0.51, "top": 0.17, "foot": 0.85, "height": 0.68},
     "sleep": {"center": 0.51, "top": 0.33, "foot": 0.85, "height": 0.52},
@@ -180,7 +181,7 @@ def encode(
     fps: float,
     dest: Path,
     loop: bool,
-    lossless: bool,
+    sleep_seam: bool,
 ) -> None:
     pending = dest.with_suffix(".tmp.webm")
     cmd = [
@@ -190,11 +191,17 @@ def encode(
         "-an", "-c:v", "libvpx-vp9", "-pix_fmt", "yuva420p",
         "-row-mt", "1", "-threads", "4", "-deadline", "good", "-cpu-used", "3",
     ]
-    if loop or lossless:
+    if loop:
         # Exact terminal frame plus an independent terminal key frame guarantees
         # a deterministic decoded loop point while retaining normal prediction.
         cmd += [
             "-lossless", "1", "-auto-alt-ref", "0",
+            "-force_key_frames", f"expr:eq(n,0)+eq(n,{len(frames) - 1})",
+        ]
+    elif sleep_seam:
+        # About 1 MiB per transition while retaining exact endpoint keys.
+        cmd += [
+            "-b:v", "0", "-crf", str(SLEEP_SEAM_CRF), "-auto-alt-ref", "0",
             "-force_key_frames", f"expr:eq(n,0)+eq(n,{len(frames) - 1})",
         ]
     else:
@@ -332,7 +339,8 @@ def process_clip(name: str, ffmpeg: str, output: Path, report_dir: Path) -> dict
         frames = anchor_sleep_frames(name, frames, idle_ref, doze_ref)
     output.mkdir(parents=True, exist_ok=True)
     dest = output / f"{name}.webm"
-    encode(ffmpeg, frames, fps, dest, loop, loop or name in ("sleepstart", "wakeup"))
+    sleep_seam = name in ("sleepstart", "wakeup")
+    encode(ffmpeg, frames, fps, dest, loop, sleep_seam)
     metrics, first, last = inspect(ffmpeg, dest, calibration, loop)
     report = {
         "clip": name,
@@ -341,6 +349,11 @@ def process_clip(name: str, ffmpeg: str, output: Path, report_dir: Path) -> dict
         "sourceSize": [640, 360],
         "sourceFps": fps,
         "mode": "loop" if loop else "once",
+        "encodingProfile": (
+            "vp9-alpha-loop-lossless"
+            if loop
+            else ("vp9-alpha-sleep-crf24" if sleep_seam else "vp9-alpha-oneshot-crf28")
+        ),
         "calibration": calibration,
         "calibrationTarget": TARGETS[calibration],
         "fixedAffine": matrix.tolist(),

@@ -36,7 +36,7 @@
 2. 运行 `py tools/process-green.py --ffmpeg <ffmpeg.exe> --clip <name>`。处理器执行 HSV 绿幕抠像、去绿溢色、固定仿射归一化，并编码 640×360 VP9-alpha WebM 到 `AliceButler/electron/media/`。
 3. 站姿按人物宽约 33%、头顶 17%、脚底 85%、中心 51% 对齐；睡姿按头顶 33%、脚底 85%、中心 51% 对齐。人物宽度由原图比例决定，不横向拉伸。doze 的 Zzz 等分离特效必须保留。
 4. `idle`、`walk`、`doze` 循环片必须通过解码后首尾 RGBA 完全一致检查；每段还必须通过逐帧 alpha 存在、不透明纯黑 <5% 和 640×360/24fps 检查。逐段结果写入 `docs/green-assets-validation/<name>.json`。
-5. 睡眠接缝按主线 `4b1a5da` 的源片锚定：`sleepstart` 尾 24 帧拉向 `doze` 首帧，`wakeup` 首 24 帧拉向 `doze` 末帧、尾 24 帧拉向 `idle` 首帧；加工后再做同一锚定并使用无损 VP9 保住端点。
+5. 睡眠接缝按主线 `4b1a5da` 的源片锚定：`sleepstart` 尾 24 帧拉向 `doze` 首帧，`wakeup` 首 24 帧拉向 `doze` 末帧、尾 24 帧拉向 `idle` 首帧；两段过渡片使用 CRF 24 高码率有损 VP9 和双端关键帧，目标单段约 1MB，三处接缝 MAE 必须 <0.5。
 6. 动作池、权重和点击防连抽只在 `AliceButler/electron/config.json` 接线；缺动作等待艾莉丝后续入仓，不自行生成视频。
 
 旧动画目录及黑底源视频目录已经删除，不再从本仓恢复。文末遗留的 WinForms/黑底说明只记录历史，不是当前动作来源。

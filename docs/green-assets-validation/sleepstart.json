@@ -8,6 +8,7 @@
   ],
   "sourceFps": 24.0,
   "mode": "once",
+  "encodingProfile": "vp9-alpha-sleep-crf24",
   "calibration": "standing",
   "calibrationTarget": {
     "center": 0.51,
@@ -29,9 +30,9 @@
   ],
   "output": "AliceButler/electron/media/sleepstart.webm",
   "frames": 240,
-  "bytes": 4542496,
+  "bytes": 1002736,
   "alphaPresent": true,
-  "maxOpaqueBlackRatio": 0.0012109375,
+  "maxOpaqueBlackRatio": 0.0017491319444444444,
   "firstBodyBBoxPxAlpha32": {
     "x0": 222,
     "y0": 61,
@@ -40,7 +41,7 @@
     "width": 209,
     "height": 245,
     "components": 1,
-    "largestArea": 32572
+    "largestArea": 32574
   },
   "lastBodyBBoxPxAlpha32": {
     "x0": 235,
@@ -50,7 +51,7 @@
     "width": 184,
     "height": 187,
     "components": 1,
-    "largestArea": 22214
+    "largestArea": 22216
   },
   "firstBodyBBoxPxAlpha128": {
     "x0": 222,
@@ -60,7 +61,7 @@
     "width": 209,
     "height": 244,
     "components": 1,
-    "largestArea": 32446
+    "largestArea": 32445
   },
   "firstBodyBBoxPercent": {
     "left": 0.346875,
@@ -91,14 +92,14 @@
     0.33055555555555555
   ],
   "footRangePercent": [
-    0.85,
+    0.8472222222222222,
     0.85
   ],
-  "maxDetachedComponents": 14,
+  "maxDetachedComponents": 28,
   "loopSeam": {
     "exact": false,
-    "rgbaMeanAbsoluteError": 12.61484157986111,
+    "rgbaMeanAbsoluteError": 12.612585720486111,
     "maxChannelDelta": 255,
-    "changedChannels": 116471
+    "changedChannels": 118939
   }
 }

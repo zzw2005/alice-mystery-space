@@ -8,6 +8,7 @@
   ],
   "sourceFps": 24.0,
   "mode": "once",
+  "encodingProfile": "vp9-alpha-sleep-crf24",
   "calibration": "sleep",
   "calibrationTarget": {
     "center": 0.51,
@@ -29,9 +30,9 @@
   ],
   "output": "AliceButler/electron/media/wakeup.webm",
   "frames": 240,
-  "bytes": 4056911,
+  "bytes": 1002466,
   "alphaPresent": true,
-  "maxOpaqueBlackRatio": 2.604166666666667e-05,
+  "maxOpaqueBlackRatio": 4.340277777777778e-05,
   "firstBodyBBoxPxAlpha32": {
     "x0": 235,
     "y0": 119,
@@ -40,7 +41,7 @@
     "width": 184,
     "height": 187,
     "components": 1,
-    "largestArea": 22214
+    "largestArea": 22216
   },
   "lastBodyBBoxPxAlpha32": {
     "x0": 221,
@@ -50,7 +51,7 @@
     "width": 211,
     "height": 245,
     "components": 1,
-    "largestArea": 32872
+    "largestArea": 32876
   },
   "firstBodyBBoxPxAlpha128": {
     "x0": 235,
@@ -60,7 +61,7 @@
     "width": 183,
     "height": 187,
     "components": 1,
-    "largestArea": 22124
+    "largestArea": 22125
   },
   "firstBodyBBoxPercent": {
     "left": 0.3671875,
@@ -94,11 +95,11 @@
     0.85,
     0.8555555555555555
   ],
-  "maxDetachedComponents": 16,
+  "maxDetachedComponents": 115,
   "loopSeam": {
     "exact": false,
-    "rgbaMeanAbsoluteError": 12.838130425347222,
+    "rgbaMeanAbsoluteError": 12.836982421875,
     "maxChannelDelta": 255,
-    "changedChannels": 119067
+    "changedChannels": 121849
   }
 }

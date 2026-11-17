@@ -12,22 +12,24 @@
   "seams": {
     "sleepstart-doze": {
       "exact": false,
-      "rgbaMeanAbsoluteError": 0.09425672743055556,
-      "maxChannelDelta": 11,
-      "changedChannels": 59733
+      "rgbaMeanAbsoluteError": 0.13288519965277779,
+      "maxChannelDelta": 15,
+      "changedChannels": 58648
     },
     "doze-wakeup": {
       "exact": false,
-      "rgbaMeanAbsoluteError": 0.09425672743055556,
-      "maxChannelDelta": 11,
-      "changedChannels": 59733
+      "rgbaMeanAbsoluteError": 0.13288519965277779,
+      "maxChannelDelta": 15,
+      "changedChannels": 58648
     },
     "wakeup-idle": {
       "exact": false,
-      "rgbaMeanAbsoluteError": 0.13592881944444443,
-      "maxChannelDelta": 13,
-      "changedChannels": 91252
+      "rgbaMeanAbsoluteError": 0.194609375,
+      "maxChannelDelta": 17,
+      "changedChannels": 85426
     }
   },
-  "note": "Mainline v5 sources carry endpoint anchors. The pipeline reapplies 24-frame anchors after keying and normalization and encodes the sleep segments losslessly. Normalized endpoint geometry matches; remaining MAE is YUVA420 color round-trip rounding. The 180 ms crossfade remains insurance."
+  "encodingProfile": "vp9-alpha-sleep-crf24",
+  "maeGate": 0.5,
+  "note": "Mainline v5 sources carry endpoint anchors. The pipeline reapplies 24-frame anchors after keying and normalization and uses CRF 24 lossy VP9 with endpoint key frames. All processed seams pass the MAE<0.5 gate. The 180 ms crossfade remains insurance."
 }
