@@ -23,6 +23,13 @@ if (!executable) throw new Error('Pass the packaged AlicePetNew.exe path');
     }
     const pet = pages.find(page => page.url().endsWith('pet.html'));
     if (!pet) throw new Error('Pet window did not load');
+    let testReady = false;
+    for (let i = 0; i < 100; i++) {
+      testReady = await app.evaluate(() => Boolean(global.aliceTest));
+      if (testReady) break;
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    if (!testReady) throw new Error('Test interface did not initialize');
     const config = require('../config.json');
     const clips = {};
     for (const clip of Object.keys(config.clips)) {
