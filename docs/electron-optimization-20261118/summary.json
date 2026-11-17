@@ -1,0 +1,142 @@
+{
+  "baseline": {
+    "on": {
+      "launchToFrameMs": 391.44788900000276,
+      "launchRangeMs": [
+        371.585523,
+        462.43313599999965
+      ],
+      "idle": {
+        "workingSetMB": 735.82421875,
+        "privateResidentMB": 277.7265625,
+        "cpuPercent": 9.150641758043388,
+        "processes": 5
+      },
+      "afterClips": {
+        "workingSetMB": 1099.4765625,
+        "privateResidentMB": 635.6953125,
+        "cpuPercent": 11.769063445330616,
+        "processes": 5
+      },
+      "parked": null,
+      "resumed": null,
+      "stableDroppedFrames": 0,
+      "totalDroppedFrames": 0,
+      "stableFpsMedian": 23.69952694588864,
+      "stableFpsRange": [
+        22.857400699980655,
+        23.912720792988647
+      ],
+      "pageErrors": 0
+    },
+    "off": {
+      "launchToFrameMs": 350.3024059999989,
+      "launchRangeMs": [
+        315.36994000000414,
+        391.32422899999074
+      ],
+      "idle": {
+        "workingSetMB": 689.1015625,
+        "privateResidentMB": 261.1328125,
+        "cpuPercent": 9.22774813409878,
+        "processes": 5
+      },
+      "afterClips": {
+        "workingSetMB": 1061.01171875,
+        "privateResidentMB": 623.48046875,
+        "cpuPercent": 11.729669916766499,
+        "processes": 5
+      },
+      "parked": null,
+      "resumed": null,
+      "stableDroppedFrames": 1,
+      "totalDroppedFrames": 1,
+      "stableFpsMedian": 23.81676987273561,
+      "stableFpsRange": [
+        22.839998660463838,
+        23.91930027539402
+      ],
+      "pageErrors": 0
+    }
+  },
+  "optimized": {
+    "on": {
+      "launchToFrameMs": 312.6375879999978,
+      "launchRangeMs": [
+        302.1641230000023,
+        341.06811100000004
+      ],
+      "idle": {
+        "workingSetMB": 456.875,
+        "privateResidentMB": 152.19921875,
+        "cpuPercent": 6.2476324036976045,
+        "processes": 4
+      },
+      "afterClips": {
+        "workingSetMB": 508.015625,
+        "privateResidentMB": 192.69921875,
+        "cpuPercent": 7.415215005064502,
+        "processes": 4
+      },
+      "parked": {
+        "workingSetMB": 483.734375,
+        "privateResidentMB": 170.84765625,
+        "cpuPercent": 0.9818562778417621,
+        "processes": 4
+      },
+      "resumed": {
+        "workingSetMB": 504.43359375,
+        "privateResidentMB": 185.6875,
+        "cpuPercent": 10.39550695707672,
+        "processes": 4
+      },
+      "stableDroppedFrames": 0,
+      "totalDroppedFrames": 9,
+      "stableFpsMedian": 23.90520924749595,
+      "stableFpsRange": [
+        23.809523077286503,
+        24.904323590706515
+      ],
+      "pageErrors": 0
+    },
+    "off": {
+      "launchToFrameMs": 300.39842599999974,
+      "launchRangeMs": [
+        275.7303460000003,
+        307.6127850000048
+      ],
+      "idle": {
+        "workingSetMB": 411.8203125,
+        "privateResidentMB": 135.58203125,
+        "cpuPercent": 5.9346933189645075,
+        "processes": 4
+      },
+      "afterClips": {
+        "workingSetMB": 462.984375,
+        "privateResidentMB": 177.65625,
+        "cpuPercent": 7.394156947183985,
+        "processes": 4
+      },
+      "parked": {
+        "workingSetMB": 436.375,
+        "privateResidentMB": 152.6875,
+        "cpuPercent": 0.660141824869655,
+        "processes": 4
+      },
+      "resumed": {
+        "workingSetMB": 457.01171875,
+        "privateResidentMB": 167.6796875,
+        "cpuPercent": 9.09422713114333,
+        "processes": 4
+      },
+      "stableDroppedFrames": 0,
+      "totalDroppedFrames": 0,
+      "stableFpsMedian": 23.903094821829338,
+      "stableFpsRange": [
+        23.783449268498465,
+        24.919878329870187
+      ],
+      "pageErrors": 0
+    }
+  }
+}

@@ -71,3 +71,14 @@ test('spring converges, gravity lands and wall collisions settle; walk alone tra
   }
   const x = p.x; p.step(.016, a, 10000); assert.equal(p.x, x);
 });
+test('drag reaches 95% in 150 ms at fast, normal and delayed tick rates without overshoot', () => {
+  for (const dt of [.008, .016, .05]) {
+    const p = new Physics(); p.mode = 'drag'; p.targetX = 500; p.targetY = 300;
+    const a = { left: 0, right: 1000, top: 0, floor: 600 };
+    for (let t = 0; t < .15; t += dt) {
+      p.step(dt, a, t * 1000); assert.ok(p.x <= 500 && p.y <= 300);
+    }
+    assert.ok(p.x > 475 && p.y > 285, `dt=${dt} x=${p.x} y=${p.y}`);
+    p.release(true); assert.equal(p.vx, 0); assert.equal(p.vy, 0);
+  }
+});

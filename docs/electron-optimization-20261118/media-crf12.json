@@ -1,0 +1,76 @@
+{
+  "crf": 12,
+  "formalMediaReplaced": false,
+  "candidates": {
+    "idle": {
+      "originalBytes": 2292670,
+      "candidateBytes": 648154,
+      "frames": 240,
+      "allFrameRgbaMae": 0.18413549804687498,
+      "worstFrameRgbaMae": 0.2422482638888889,
+      "faceAhogeRegionMae": 0.7881350022862369,
+      "maxChannelDelta": 50,
+      "originalLoopMae": 0.0,
+      "candidateLoopMae": 0.0,
+      "visualReview": "not approved; retain original unless both gates pass",
+      "candidateSha256": "eb92dc069644106f701170aa2547318f9bd20e7b5064f1184ee4b60a387a30ba"
+    },
+    "walk": {
+      "originalBytes": 5760282,
+      "candidateBytes": 2300837,
+      "frames": 240,
+      "allFrameRgbaMae": 0.20205081741898148,
+      "worstFrameRgbaMae": 0.2564507378472222,
+      "faceAhogeRegionMae": 0.9604530178326475,
+      "maxChannelDelta": 42,
+      "originalLoopMae": 0.0,
+      "candidateLoopMae": 0.0,
+      "visualReview": "not approved; retain original unless both gates pass",
+      "candidateSha256": "4bbc79570acd2a976e284f80d855b947fb129e5e4c80b49c0862c73035ff3212"
+    },
+    "doze": {
+      "originalBytes": 4271743,
+      "candidateBytes": 1692129,
+      "frames": 240,
+      "allFrameRgbaMae": 0.14254914912471064,
+      "worstFrameRgbaMae": 0.18242513020833334,
+      "faceAhogeRegionMae": 0.42102520576131686,
+      "maxChannelDelta": 40,
+      "originalLoopMae": 0.0,
+      "candidateLoopMae": 0.0,
+      "visualReview": "not approved; retain original unless both gates pass",
+      "candidateSha256": "7006587d7c36db705463a36fa9ae624e0244a07883a0aa9003595f7913ff5e59"
+    }
+  },
+  "seams": {
+    "sleepstart->doze": {
+      "beforeMae": 0.13288519965277779,
+      "afterMae": 0.13985243055555555,
+      "notWorse": false
+    },
+    "doze->wakeup": {
+      "beforeMae": 0.13288519965277779,
+      "afterMae": 0.13985243055555555,
+      "notWorse": false
+    },
+    "wakeup->idle": {
+      "beforeMae": 1.316980251736111,
+      "afterMae": 1.318486328125,
+      "notWorse": false
+    }
+  },
+  "formalSha256": {
+    "clickhappy.webm": "344ac5f285157e557a1787f124eaf1eb11ca323aeac45a6bbf91fc08fd6754ee",
+    "clickshy.webm": "17f5af18b879bec68907863dd7fc3c40976d74403b75993bf04b26402e71a0f0",
+    "clicktsun.webm": "7561b3d94a994dba0090dca0f792e7adc9e0446a8caacd0442c096e0f58ed1a6",
+    "doze.webm": "15104f31a87cca9743bc59a0e182c343718ff59e4e1538d8fae4c8f4a940778f",
+    "idle.webm": "fc548cbf1ed0b3f32d1471dfb86b50dffeb6c37b3ce5f6beb9722cf8fb6775ff",
+    "sleepstart.webm": "a53f0caaef0f467b7df55ab866dae677f111ce06f91bc0337d97a470e980fd7f",
+    "wakeup.webm": "3fe8be1d86886e19f1790ebb8da8582d38ffb5908773d9f3e94c3e2babcb1587",
+    "walk.webm": "84e17d74ed382eb63a4c3135e3e09ec1af2ad78b1a822e0f20b4c71ea263c22d",
+    "wave.webm": "e334d773776b8adc2fc3b3f7d9eab14427070aab2324fbc47adbf30d3ffaa567"
+  },
+  "seamGatePassed": false,
+  "ffmpegVersion": "ffmpeg version 7.1.5-0+deb13u1 Copyright (c) 2000-2026 the FFmpeg developers",
+  "numpyVersion": "2.3.5"
+}

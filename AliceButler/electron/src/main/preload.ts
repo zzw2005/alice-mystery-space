@@ -7,6 +7,8 @@ const subscribe = (channel: string, callback: (data: unknown) => void) => {
 contextBridge.exposeInMainWorld('alice', {
   ready: (kind: 'pet' | 'chat') => ipcRenderer.send(kind === 'pet' ? 'renderer-ready' : 'chat-ready'),
   onPlay: (callback: (data: unknown) => void) => subscribe('play', callback),
+  onSuspend: (callback: (data: unknown) => void) => subscribe('suspend-playback', callback),
+  suspended: () => ipcRenderer.send('playback-suspended'),
   onPose: (callback: (data: unknown) => void) => subscribe('pose', callback),
   onChat: (callback: (data: unknown) => void) => subscribe('chat-state', callback),
   hit: (value: boolean) => ipcRenderer.send('hit', value),

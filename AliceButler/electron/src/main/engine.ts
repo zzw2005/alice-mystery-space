@@ -108,9 +108,15 @@ export class Physics {
   step(dt: number, area: { left: number; right: number; top: number; floor: number }, now: number): void {
     dt = Math.min(.05, Math.max(.001, dt));
     if (this.mode === 'drag') {
-      this.vx += (200 * (this.targetX - this.x) - 30 * this.vx) * dt;
-      this.vy += (200 * (this.targetY - this.y) - 30 * this.vy) * dt;
-      this.x += this.vx * dt; this.y += this.vy * dt;
+      // Exact critically damped spring: stable even after a slow frame, with a
+      // shorter response than the old explicit-Euler 200/30 spring.
+      const omega = 40, decay = Math.exp(-omega * dt);
+      const dx = this.x - this.targetX, dy = this.y - this.targetY;
+      const cx = this.vx + omega * dx, cy = this.vy + omega * dy;
+      this.x = this.targetX + (dx + cx * dt) * decay;
+      this.y = this.targetY + (dy + cy * dt) * decay;
+      this.vx = (this.vx - omega * cx * dt) * decay;
+      this.vy = (this.vy - omega * cy * dt) * decay;
     } else if (this.mode === 'air') {
       for (let i = 0; i < 3; i++) {
         this.vy += 1400 * dt / 3; this.x += this.vx * dt / 3; this.y += this.vy * dt / 3;

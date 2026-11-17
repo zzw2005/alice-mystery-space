@@ -1,0 +1,891 @@
+{
+  "platform": "linux",
+  "arch": "x64",
+  "electron": "45.3.3",
+  "headless": false,
+  "memoryUnit": "MiB; Windows privateBytes only; Linux privateResidentMB is a separate /proc counter",
+  "runs": [
+    {
+      "mode": "on",
+      "launchToFrameMs": 341.06811100000004,
+      "internalStartupMs": 237.231075,
+      "idle": [
+        {
+          "processes": 4,
+          "workingSetMB": 456.43359375,
+          "privateMB": null,
+          "privateResidentMB": 149.609375,
+          "cpuPercent": 6.567318286192524
+        },
+        {
+          "processes": 4,
+          "workingSetMB": 456.71484375,
+          "privateMB": null,
+          "privateResidentMB": 149.8828125,
+          "cpuPercent": 6.52194663914821
+        },
+        {
+          "processes": 4,
+          "workingSetMB": 456.57421875,
+          "privateMB": null,
+          "privateResidentMB": 149.66796875,
+          "cpuPercent": 4.946589040750643
+        },
+        {
+          "processes": 4,
+          "workingSetMB": 456.890625,
+          "privateMB": null,
+          "privateResidentMB": 149.90234375,
+          "cpuPercent": 7.556470981168545
+        },
+        {
+          "processes": 4,
+          "workingSetMB": 457.06640625,
+          "privateMB": null,
+          "privateResidentMB": 150.12109375,
+          "cpuPercent": 5.930124362260727
+        }
+      ],
+      "afterClips": {
+        "processes": 4,
+        "workingSetMB": 508.015625,
+        "privateMB": null,
+        "privateResidentMB": 192.69921875,
+        "cpuPercent": 7.415215005064502
+      },
+      "parked": {
+        "processes": 4,
+        "workingSetMB": 484.3828125,
+        "privateMB": null,
+        "privateResidentMB": 170.84765625,
+        "cpuPercent": 1.6413978468885513
+      },
+      "resumed": {
+        "processes": 4,
+        "workingSetMB": 504.890625,
+        "privateMB": null,
+        "privateResidentMB": 185.6875,
+        "cpuPercent": 8.00485257174568
+      },
+      "clips": {
+        "idle": {
+          "sources": 1,
+          "totalFrames": 194,
+          "droppedFrames": 3,
+          "stableDropped": 0,
+          "stableFps": 24.858052046220312
+        },
+        "walk": {
+          "sources": 1,
+          "totalFrames": 34,
+          "droppedFrames": 1,
+          "stableDropped": 0,
+          "stableFps": 23.893434469887538
+        },
+        "wave": {
+          "sources": 1,
+          "totalFrames": 35,
+          "droppedFrames": 0,
+          "stableDropped": 0,
+          "stableFps": 23.809523077286503
+        },
+        "sleepstart": {
+          "sources": 1,
+          "totalFrames": 34,
+          "droppedFrames": 0,
+          "stableDropped": 0,
+          "stableFps": 23.891561863004018
+        },
+        "doze": {
+          "sources": 1,
+          "totalFrames": 34,
+          "droppedFrames": 0,
+          "stableDropped": 0,
+          "stableFps": 23.90075960059701
+        },
+        "wakeup": {
+          "sources": 1,
+          "totalFrames": 34,
+          "droppedFrames": 0,
+          "stableDropped": 0,
+          "stableFps": 23.904608444859285
+        },
+        "clickhappy": {
+          "sources": 1,
+          "totalFrames": 34,
+          "droppedFrames": 0,
+          "stableDropped": 0,
+          "stableFps": 23.90513905348462
+        },
+        "clickshy": {
+          "sources": 1,
+          "totalFrames": 35,
+          "droppedFrames": 0,
+          "stableDropped": 0,
+          "stableFps": 24.904323590706515
+        },
+        "clicktsun": {
+          "sources": 1,
+          "totalFrames": 35,
+          "droppedFrames": 0,
+          "stableDropped": 0,
+          "stableFps": 23.90520924749595
+        }
+      },
+      "errors": [],
+      "gpu": {
+        "2d_canvas": "disabled_software",
+        "direct_rendering_display_compositor": "disabled_off_ok",
+        "gpu_compositing": "disabled_software",
+        "multiple_raster_threads": "disabled_off",
+        "opengl": "disabled_off",
+        "rasterization": "disabled_software",
+        "raw_draw": "disabled_off_ok",
+        "skia_graphite": "disabled_off",
+        "trees_in_viz": "disabled_off",
+        "video_decode": "disabled_software",
+        "video_encode": "disabled_software",
+        "vulkan": "disabled_off",
+        "webgl": "disabled_off",
+        "webgpu": "disabled_off",
+        "webgpu_on_vk_via_gl_interop": "disabled_off",
+        "webnn": "disabled_off"
+      }
+    },
+    {
+      "mode": "off",
+      "launchToFrameMs": 275.7303460000003,
+      "internalStartupMs": 163.566161,
+      "idle": [
+        {
+          "processes": 4,
+          "workingSetMB": 412.16796875,
+          "privateMB": null,
+          "privateResidentMB": 135.99609375,
+          "cpuPercent": 5.9310469663674095
+        },
+        {
+          "processes": 4,
+          "workingSetMB": 412.53125,
+          "privateMB": null,
+          "privateResidentMB": 136.359375,
+          "cpuPercent": 5.948215170041999
+        },
+        {
+          "processes": 4,
+          "workingSetMB": 411.63671875,
+          "privateMB": null,
+          "privateResidentMB": 135.265625,
+          "cpuPercent": 5.938607992966911
+        },
+        {
+          "processes": 4,
+          "workingSetMB": 412.0625,
+          "privateMB": null,
+          "privateResidentMB": 135.65234375,
+          "cpuPercent": 4.6284128354785565
+        },
+        {
+          "processes": 4,
+          "workingSetMB": 411.984375,
+          "privateMB": null,
+          "privateResidentMB": 135.53125,
+          "cpuPercent": 5.613574144498635
+        }
+      ],
+      "afterClips": {
+        "processes": 4,
+        "workingSetMB": 462.984375,
+        "privateMB": null,
+        "privateResidentMB": 177.58984375,
+        "cpuPercent": 6.804404146650553
+      },
+      "parked": {
+        "processes": 4,
+        "workingSetMB": 436.375,
+        "privateMB": null,
+        "privateResidentMB": 152.37109375,
+        "cpuPercent": 1.318688311587463
+      },
+      "resumed": {
+        "processes": 4,
+        "workingSetMB": 457.01171875,
+        "privateMB": null,
+        "privateResidentMB": 167.40625,
+        "cpuPercent": 9.09422713114333
+      },
+      "clips": {
+        "idle": {
+          "sources": 1,
+          "totalFrames": 193,
+          "droppedFrames": 0,
+          "stableDropped": 0,
+          "stableFps": 23.90621836768406
+        },
+        "walk": {
+          "sources": 1,
+          "totalFrames": 35,
+          "droppedFrames": 0,
+          "stableDropped": 0,
+          "stableFps": 24.89844058048958
+        },
+        "wave": {
+          "sources": 1,
+          "totalFrames": 34,
+          "droppedFrames": 0,
+          "stableDropped": 0,
+          "stableFps": 23.916994253750715
+        },
+        "sleepstart": {
+          "sources": 1,
+          "totalFrames": 35,
+          "droppedFrames": 0,
+          "stableDropped": 0,
+          "stableFps": 23.90517669818638
+        },
+        "doze": {
+          "sources": 1,
+          "totalFrames": 34,
+          "droppedFrames": 0,
+          "stableDropped": 0,
+          "stableFps": 23.905414498292966
+        },
+        "wakeup": {
+          "sources": 1,
+          "totalFrames": 35,
+          "droppedFrames": 0,
+          "stableDropped": 0,
+          "stableFps": 23.882898779794054
+        },
+        "clickhappy": {
+          "sources": 1,
+          "totalFrames": 35,
+          "droppedFrames": 0,
+          "stableDropped": 0,
+          "stableFps": 23.864132686749535
+        },
+        "clickshy": {
+          "sources": 1,
+          "totalFrames": 35,
+          "droppedFrames": 0,
+          "stableDropped": 0,
+          "stableFps": 24.919878329870187
+        },
+        "clicktsun": {
+          "sources": 1,
+          "totalFrames": 34,
+          "droppedFrames": 0,
+          "stableDropped": 0,
+          "stableFps": 23.92061448925026
+        }
+      },
+      "errors": [],
+      "gpu": {
+        "2d_canvas": "disabled_software",
+        "direct_rendering_display_compositor": "disabled_off_ok",
+        "gpu_compositing": "disabled_software",
+        "multiple_raster_threads": "disabled_off",
+        "opengl": "disabled_off",
+        "rasterization": "disabled_software",
+        "raw_draw": "disabled_off_ok",
+        "skia_graphite": "disabled_off",
+        "trees_in_viz": "disabled_off",
+        "video_decode": "disabled_software",
+        "video_encode": "disabled_software",
+        "vulkan": "disabled_off",
+        "webgl": "disabled_off",
+        "webgpu": "disabled_off",
+        "webgpu_on_vk_via_gl_interop": "disabled_off",
+        "webnn": "disabled_off"
+      }
+    },
+    {
+      "mode": "on",
+      "launchToFrameMs": 302.1641230000023,
+      "internalStartupMs": 208.869756,
+      "idle": [
+        {
+          "processes": 4,
+          "workingSetMB": 457.75,
+          "privateMB": null,
+          "privateResidentMB": 152.83203125,
+          "cpuPercent": 6.899084141081675
+        },
+        {
+          "processes": 4,
+          "workingSetMB": 457.984375,
+          "privateMB": null,
+          "privateResidentMB": 153.08203125,
+          "cpuPercent": 6.58154916227234
+        },
+        {
+          "processes": 4,
+          "workingSetMB": 456.63671875,
+          "privateMB": null,
+          "privateResidentMB": 151.71875,
+          "cpuPercent": 6.589367458482752
+        },
+        {
+          "processes": 4,
+          "workingSetMB": 456.92578125,
+          "privateMB": null,
+          "privateResidentMB": 151.9921875,
+          "cpuPercent": 5.583514347713093
+        },
+        {
+          "processes": 4,
+          "workingSetMB": 457.12109375,
+          "privateMB": null,
+          "privateResidentMB": 152.19921875,
+          "cpuPercent": 5.938741226432693
+        }
+      ],
+      "afterClips": {
+        "processes": 4,
+        "workingSetMB": 502.15625,
+        "privateMB": null,
+        "privateResidentMB": 191.09765625,
+        "cpuPercent": 6.780502523646463
+      },
+      "parked": {
+        "processes": 4,
+        "workingSetMB": 476.09375,
+        "privateMB": null,
+        "privateResidentMB": 166.4296875,
+        "cpuPercent": 0.9818562778417621
+      },
+      "resumed": {
+        "processes": 4,
+        "workingSetMB": 496.6953125,
+        "privateMB": null,
+        "privateResidentMB": 181.4296875,
+        "cpuPercent": 10.39550695707672
+      },
+      "clips": {
+        "idle": {
+          "sources": 1,
+          "totalFrames": 193,
+          "droppedFrames": 3,
+          "stableDropped": 0,
+          "stableFps": 23.839551119529336
+        },
+        "walk": {
+          "sources": 1,
+          "totalFrames": 35,
+          "droppedFrames": 0,
+          "stableDropped": 0,
+          "stableFps": 24.90378276596059
+        },
+        "wave": {
+          "sources": 1,
+          "totalFrames": 34,
+          "droppedFrames": 0,
+          "stableDropped": 0,
+          "stableFps": 23.9167438534731
+        },
+        "sleepstart": {
+          "sources": 1,
+          "totalFrames": 35,
+          "droppedFrames": 0,
+          "stableDropped": 0,
+          "stableFps": 23.91112917145278
+        },
+        "doze": {
+          "sources": 1,
+          "totalFrames": 35,
+          "droppedFrames": 0,
+          "stableDropped": 0,
+          "stableFps": 23.89575496015237
+        },
+        "wakeup": {
+          "sources": 1,
+          "totalFrames": 35,
+          "droppedFrames": 0,
+          "stableDropped": 0,
+          "stableFps": 24.890829593020662
+        },
+        "clickhappy": {
+          "sources": 1,
+          "totalFrames": 35,
+          "droppedFrames": 0,
+          "stableDropped": 0,
+          "stableFps": 23.90462834969826
+        },
+        "clickshy": {
+          "sources": 1,
+          "totalFrames": 35,
+          "droppedFrames": 0,
+          "stableDropped": 0,
+          "stableFps": 23.894469811239418
+        },
+        "clicktsun": {
+          "sources": 1,
+          "totalFrames": 35,
+          "droppedFrames": 0,
+          "stableDropped": 0,
+          "stableFps": 24.88467931955854
+        }
+      },
+      "errors": [],
+      "gpu": {
+        "2d_canvas": "disabled_software",
+        "direct_rendering_display_compositor": "disabled_off_ok",
+        "gpu_compositing": "disabled_software",
+        "multiple_raster_threads": "disabled_off",
+        "opengl": "disabled_off",
+        "rasterization": "disabled_software",
+        "raw_draw": "disabled_off_ok",
+        "skia_graphite": "disabled_off",
+        "trees_in_viz": "disabled_off",
+        "video_decode": "disabled_software",
+        "video_encode": "disabled_software",
+        "vulkan": "disabled_off",
+        "webgl": "disabled_off",
+        "webgpu": "disabled_off",
+        "webgpu_on_vk_via_gl_interop": "disabled_off",
+        "webnn": "disabled_off"
+      }
+    },
+    {
+      "mode": "off",
+      "launchToFrameMs": 307.6127850000048,
+      "internalStartupMs": 211.584176,
+      "idle": [
+        {
+          "processes": 4,
+          "workingSetMB": 411.8203125,
+          "privateMB": null,
+          "privateResidentMB": 135.71875,
+          "cpuPercent": 4.948681842240549
+        },
+        {
+          "processes": 4,
+          "workingSetMB": 412.0390625,
+          "privateMB": null,
+          "privateResidentMB": 135.9453125,
+          "cpuPercent": 5.92565736175886
+        },
+        {
+          "processes": 4,
+          "workingSetMB": 410.70703125,
+          "privateMB": null,
+          "privateResidentMB": 134.6015625,
+          "cpuPercent": 5.9346933189645075
+        },
+        {
+          "processes": 4,
+          "workingSetMB": 411.0390625,
+          "privateMB": null,
+          "privateResidentMB": 134.8828125,
+          "cpuPercent": 6.568613039322576
+        },
+        {
+          "processes": 4,
+          "workingSetMB": 411.1796875,
+          "privateMB": null,
+          "privateResidentMB": 134.9921875,
+          "cpuPercent": 5.277497412461598
+        }
+      ],
+      "afterClips": {
+        "processes": 4,
+        "workingSetMB": 463.75390625,
+        "privateMB": null,
+        "privateResidentMB": 178.9453125,
+        "cpuPercent": 7.394156947183985
+      },
+      "parked": {
+        "processes": 4,
+        "workingSetMB": 437.00390625,
+        "privateMB": null,
+        "privateResidentMB": 154.0234375,
+        "cpuPercent": 0.660141824869655
+      },
+      "resumed": {
+        "processes": 4,
+        "workingSetMB": 457.53515625,
+        "privateMB": null,
+        "privateResidentMB": 168.90625,
+        "cpuPercent": 8.293029670716532
+      },
+      "clips": {
+        "idle": {
+          "sources": 1,
+          "totalFrames": 193,
+          "droppedFrames": 0,
+          "stableDropped": 0,
+          "stableFps": 23.821156852567025
+        },
+        "walk": {
+          "sources": 1,
+          "totalFrames": 34,
+          "droppedFrames": 0,
+          "stableDropped": 0,
+          "stableFps": 23.892327886409355
+        },
+        "wave": {
+          "sources": 1,
+          "totalFrames": 35,
+          "droppedFrames": 0,
+          "stableDropped": 0,
+          "stableFps": 23.91231947863945
+        },
+        "sleepstart": {
+          "sources": 1,
+          "totalFrames": 35,
+          "droppedFrames": 0,
+          "stableDropped": 0,
+          "stableFps": 23.921000083908837
+        },
+        "doze": {
+          "sources": 1,
+          "totalFrames": 34,
+          "droppedFrames": 0,
+          "stableDropped": 0,
+          "stableFps": 23.89342861820282
+        },
+        "wakeup": {
+          "sources": 1,
+          "totalFrames": 35,
+          "droppedFrames": 0,
+          "stableDropped": 0,
+          "stableFps": 23.92473653504425
+        },
+        "clickhappy": {
+          "sources": 1,
+          "totalFrames": 34,
+          "droppedFrames": 0,
+          "stableDropped": 0,
+          "stableFps": 23.89176783087377
+        },
+        "clickshy": {
+          "sources": 1,
+          "totalFrames": 35,
+          "droppedFrames": 0,
+          "stableDropped": 0,
+          "stableFps": 23.88923372168252
+        },
+        "clicktsun": {
+          "sources": 1,
+          "totalFrames": 35,
+          "droppedFrames": 0,
+          "stableDropped": 0,
+          "stableFps": 23.903094821829338
+        }
+      },
+      "errors": [],
+      "gpu": {
+        "2d_canvas": "disabled_software",
+        "direct_rendering_display_compositor": "disabled_off_ok",
+        "gpu_compositing": "disabled_software",
+        "multiple_raster_threads": "disabled_off",
+        "opengl": "disabled_off",
+        "rasterization": "disabled_software",
+        "raw_draw": "disabled_off_ok",
+        "skia_graphite": "disabled_off",
+        "trees_in_viz": "disabled_off",
+        "video_decode": "disabled_software",
+        "video_encode": "disabled_software",
+        "vulkan": "disabled_off",
+        "webgl": "disabled_off",
+        "webgpu": "disabled_off",
+        "webgpu_on_vk_via_gl_interop": "disabled_off",
+        "webnn": "disabled_off"
+      }
+    },
+    {
+      "mode": "on",
+      "launchToFrameMs": 312.6375879999978,
+      "internalStartupMs": 214.34378800000002,
+      "idle": [
+        {
+          "processes": 4,
+          "workingSetMB": 456.4453125,
+          "privateMB": null,
+          "privateResidentMB": 153.4453125,
+          "cpuPercent": 5.603750071808045
+        },
+        {
+          "processes": 4,
+          "workingSetMB": 456.74609375,
+          "privateMB": null,
+          "privateResidentMB": 153.75,
+          "cpuPercent": 5.920389833582813
+        },
+        {
+          "processes": 4,
+          "workingSetMB": 456.61328125,
+          "privateMB": null,
+          "privateResidentMB": 153.4765625,
+          "cpuPercent": 7.540786352978092
+        },
+        {
+          "processes": 4,
+          "workingSetMB": 456.875,
+          "privateMB": null,
+          "privateResidentMB": 153.76953125,
+          "cpuPercent": 6.2476324036976045
+        },
+        {
+          "processes": 4,
+          "workingSetMB": 457.0703125,
+          "privateMB": null,
+          "privateResidentMB": 154.00390625,
+          "cpuPercent": 5.589879378649964
+        }
+      ],
+      "afterClips": {
+        "processes": 4,
+        "workingSetMB": 508.17578125,
+        "privateMB": null,
+        "privateResidentMB": 197.2890625,
+        "cpuPercent": 8.220341176437426
+      },
+      "parked": {
+        "processes": 4,
+        "workingSetMB": 483.734375,
+        "privateMB": null,
+        "privateResidentMB": 173.40234375,
+        "cpuPercent": 0.6596564970722796
+      },
+      "resumed": {
+        "processes": 4,
+        "workingSetMB": 504.43359375,
+        "privateMB": null,
+        "privateResidentMB": 188.4375,
+        "cpuPercent": 14.032041296520887
+      },
+      "clips": {
+        "idle": {
+          "sources": 1,
+          "totalFrames": 192,
+          "droppedFrames": 2,
+          "stableDropped": 0,
+          "stableFps": 23.91898830014636
+        },
+        "walk": {
+          "sources": 1,
+          "totalFrames": 34,
+          "droppedFrames": 0,
+          "stableDropped": 0,
+          "stableFps": 23.90620717567156
+        },
+        "wave": {
+          "sources": 1,
+          "totalFrames": 35,
+          "droppedFrames": 0,
+          "stableDropped": 0,
+          "stableFps": 24.898520428031343
+        },
+        "sleepstart": {
+          "sources": 1,
+          "totalFrames": 35,
+          "droppedFrames": 0,
+          "stableDropped": 0,
+          "stableFps": 23.91507083939931
+        },
+        "doze": {
+          "sources": 1,
+          "totalFrames": 34,
+          "droppedFrames": 0,
+          "stableDropped": 0,
+          "stableFps": 23.848735744682788
+        },
+        "wakeup": {
+          "sources": 1,
+          "totalFrames": 35,
+          "droppedFrames": 0,
+          "stableDropped": 0,
+          "stableFps": 23.846180569926197
+        },
+        "clickhappy": {
+          "sources": 1,
+          "totalFrames": 34,
+          "droppedFrames": 0,
+          "stableDropped": 0,
+          "stableFps": 23.899258840367423
+        },
+        "clickshy": {
+          "sources": 1,
+          "totalFrames": 35,
+          "droppedFrames": 0,
+          "stableDropped": 0,
+          "stableFps": 24.871455414436905
+        },
+        "clicktsun": {
+          "sources": 1,
+          "totalFrames": 35,
+          "droppedFrames": 0,
+          "stableDropped": 0,
+          "stableFps": 23.925069672419884
+        }
+      },
+      "errors": [],
+      "gpu": {
+        "2d_canvas": "disabled_software",
+        "direct_rendering_display_compositor": "disabled_off_ok",
+        "gpu_compositing": "disabled_software",
+        "multiple_raster_threads": "disabled_off",
+        "opengl": "disabled_off",
+        "rasterization": "disabled_software",
+        "raw_draw": "disabled_off_ok",
+        "skia_graphite": "disabled_off",
+        "trees_in_viz": "disabled_off",
+        "video_decode": "disabled_software",
+        "video_encode": "disabled_software",
+        "vulkan": "disabled_off",
+        "webgl": "disabled_off",
+        "webgpu": "disabled_off",
+        "webgpu_on_vk_via_gl_interop": "disabled_off",
+        "webnn": "disabled_off"
+      }
+    },
+    {
+      "mode": "off",
+      "launchToFrameMs": 300.39842599999974,
+      "internalStartupMs": 187.343596,
+      "idle": [
+        {
+          "processes": 4,
+          "workingSetMB": 412.0390625,
+          "privateMB": null,
+          "privateResidentMB": 136.07421875,
+          "cpuPercent": 6.2672289392324325
+        },
+        {
+          "processes": 4,
+          "workingSetMB": 412.33203125,
+          "privateMB": null,
+          "privateResidentMB": 136.3828125,
+          "cpuPercent": 6.241028560926191
+        },
+        {
+          "processes": 4,
+          "workingSetMB": 411.06640625,
+          "privateMB": null,
+          "privateResidentMB": 135.10546875,
+          "cpuPercent": 6.577877906966899
+        },
+        {
+          "processes": 4,
+          "workingSetMB": 411.42578125,
+          "privateMB": null,
+          "privateResidentMB": 135.33203125,
+          "cpuPercent": 5.615272394021055
+        },
+        {
+          "processes": 4,
+          "workingSetMB": 411.70703125,
+          "privateMB": null,
+          "privateResidentMB": 135.58203125,
+          "cpuPercent": 5.9364284601668675
+        }
+      ],
+      "afterClips": {
+        "processes": 4,
+        "workingSetMB": 462.3984375,
+        "privateMB": null,
+        "privateResidentMB": 177.65625,
+        "cpuPercent": 7.723671899392282
+      },
+      "parked": {
+        "processes": 4,
+        "workingSetMB": 436.05078125,
+        "privateMB": null,
+        "privateResidentMB": 152.6875,
+        "cpuPercent": 0.6600986847533706
+      },
+      "resumed": {
+        "processes": 4,
+        "workingSetMB": 456.66015625,
+        "privateMB": null,
+        "privateResidentMB": 167.6796875,
+        "cpuPercent": 10.43057612542486
+      },
+      "clips": {
+        "idle": {
+          "sources": 1,
+          "totalFrames": 193,
+          "droppedFrames": 0,
+          "stableDropped": 0,
+          "stableFps": 23.874222573742887
+        },
+        "walk": {
+          "sources": 1,
+          "totalFrames": 34,
+          "droppedFrames": 0,
+          "stableDropped": 0,
+          "stableFps": 23.893488919237893
+        },
+        "wave": {
+          "sources": 1,
+          "totalFrames": 35,
+          "droppedFrames": 0,
+          "stableDropped": 0,
+          "stableFps": 23.901512336523673
+        },
+        "sleepstart": {
+          "sources": 1,
+          "totalFrames": 34,
+          "droppedFrames": 0,
+          "stableDropped": 0,
+          "stableFps": 23.898662834563872
+        },
+        "doze": {
+          "sources": 1,
+          "totalFrames": 34,
+          "droppedFrames": 0,
+          "stableDropped": 0,
+          "stableFps": 23.90672023304686
+        },
+        "wakeup": {
+          "sources": 1,
+          "totalFrames": 35,
+          "droppedFrames": 0,
+          "stableDropped": 0,
+          "stableFps": 23.90321302208775
+        },
+        "clickhappy": {
+          "sources": 1,
+          "totalFrames": 35,
+          "droppedFrames": 0,
+          "stableDropped": 0,
+          "stableFps": 23.862176672937256
+        },
+        "clickshy": {
+          "sources": 1,
+          "totalFrames": 35,
+          "droppedFrames": 0,
+          "stableDropped": 0,
+          "stableFps": 23.783449268498465
+        },
+        "clicktsun": {
+          "sources": 1,
+          "totalFrames": 34,
+          "droppedFrames": 0,
+          "stableDropped": 0,
+          "stableFps": 23.91068948604155
+        }
+      },
+      "errors": [],
+      "gpu": {
+        "2d_canvas": "disabled_software",
+        "direct_rendering_display_compositor": "disabled_off_ok",
+        "gpu_compositing": "disabled_software",
+        "multiple_raster_threads": "disabled_off",
+        "opengl": "disabled_off",
+        "rasterization": "disabled_software",
+        "raw_draw": "disabled_off_ok",
+        "skia_graphite": "disabled_off",
+        "trees_in_viz": "disabled_off",
+        "video_decode": "disabled_software",
+        "video_encode": "disabled_software",
+        "vulkan": "disabled_off",
+        "webgl": "disabled_off",
+        "webgpu": "disabled_off",
+        "webgpu_on_vk_via_gl_interop": "disabled_off",
+        "webnn": "disabled_off"
+      }
+    }
+  ]
+}
