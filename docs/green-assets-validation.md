@@ -33,7 +33,7 @@ Percentages are calculated from the 640x360 frame using alpha > 32.
 
 | Clip | Mode | BBox px `[left,top,right,foot]` | Left | Right | Top | Foot | Width | Height | Center | Bytes |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| idle | loop | 221, 61, 432, 306 | 34.53% | 67.50% | 16.94% | 85.00% | 32.97% | 68.06% | 51.02% | 4,543,101 |
+| idle | loop | 221, 61, 432, 306 | 34.53% | 67.50% | 16.94% | 85.00% | 32.97% | 68.06% | 51.02% | 2,292,670 |
 | walk | loop | 221, 61, 433, 306 | 34.53% | 67.66% | 16.94% | 85.00% | 33.13% | 68.06% | 51.09% | 5,760,282 |
 | wave | once | 221, 61, 433, 306 | 34.53% | 67.66% | 16.94% | 85.00% | 33.13% | 68.06% | 51.09% | 1,113,100 |
 | clickhappy | once | 221, 61, 432, 306 | 34.53% | 67.50% | 16.94% | 85.00% | 32.97% | 68.06% | 51.02% | 823,553 |
@@ -47,6 +47,11 @@ The first-frame height error against the requested calibration is 0.2 px for
 all nine clips. Standing horizontal-center error is at most 0.6 px. All
 standing clips keep their source aspect ratio; the measured visible width is
 32.34-33.13%, compatible with the specified approximately 33% Q-style body.
+
+The delivered `idle` source is the owner-provided periodic-blink version
+(approximately one blink every two seconds). With the common standing
+calibration it measures the required L34/T17/R68/B85 body box and its lossless
+loop endpoints are RGBA-equal.
 
 The `doze` report observes up to 15 detached alpha components in a frame,
 confirming that the built-in Zzz/effects survive keying. Its decoded first and
@@ -88,6 +93,6 @@ a pose or scale discontinuity.
 - Player tests cover weighted non-repeating picks, idle-loop versus
   wave-one-shot behavior, click scheduling, sleep relay, and presence fallback.
 
-Total current video payload: 19,890,352 bytes (18.97 MiB). Loop clips remain
+Total current video payload: 17,639,921 bytes (16.82 MiB). Loop clips remain
 lossless VP9 with explicit terminal key frames. The two sleep-seam clips use
 CRF 24 lossy VP9 with endpoint key frames. Other one-shot clips remain CRF 28.
