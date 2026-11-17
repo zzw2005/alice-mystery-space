@@ -1,0 +1,54 @@
+{
+  "_note": "Registry of live tuning values (stage 0). Components still read their code defaults; this file is the single reference for what the values ARE and will become the runtime source in stage 2. Keep in sync per CHANGE-DISCIPLINE.md rule 9.",
+  "idlePoolWeights": {
+    "celebrate": 12,
+    "fish": 14,
+    "quiet": 4,
+    "sit": 28,
+    "startled": 6,
+    "water": 14,
+    "wave": 18,
+    "wiggle": 10,
+    "yawn": 8
+  },
+  "limits": {
+    "bubbleRowsMax": 200,
+    "clipPrefetch": 3,
+    "clipWindowAhead": 8,
+    "clipWindowBehind": 8,
+    "historyReplayPairs": 30,
+    "jobBadFileFails": 5,
+    "petErrorLogMB": 1,
+    "replyQuarantineMinAgeSec": 90,
+    "replyQuarantineMinFails": 5,
+    "runnerLogFileMB": 20,
+    "seenRetentionDays": 30,
+    "typingTimeoutSec": 120,
+    "watchdogLogMB": 1
+  },
+  "runnerRespawn": {
+    "backoffSec": [
+      5,
+      20,
+      60
+    ],
+    "budgetCount": 3,
+    "budgetWindowMin": 10
+  },
+  "sleep": {
+    "idleToSleepMin": 3
+  },
+  "timersMs": {
+    "anim": 16,
+    "hookPollSec": 5,
+    "motion": 16,
+    "statusTick": 2000,
+    "petOutboxPoll": 1000
+  },
+  "watchThresholds": {
+    "petHeartbeatStaleSec": 180,
+    "presenceRefreshMin": 8,
+    "presenceValidMin": 12,
+    "runnerHeartbeatStaleSec": 90
+  }
+}
