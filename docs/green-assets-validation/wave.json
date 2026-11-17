@@ -1,0 +1,104 @@
+{
+  "clip": "wave",
+  "source": "clips-green/v2/wave.mp4",
+  "sourceSha256": "318676d934d7148497f6dacbacee9e8788092dda98574fd483f43db79f6352fa",
+  "sourceSize": [
+    640,
+    360
+  ],
+  "sourceFps": 24.0,
+  "mode": "once",
+  "calibration": "standing",
+  "calibrationTarget": {
+    "center": 0.51,
+    "top": 0.17,
+    "foot": 0.85,
+    "height": 0.68
+  },
+  "fixedAffine": [
+    [
+      0.4985743463039398,
+      0.0,
+      1.578818678855896
+    ],
+    [
+      0.0,
+      0.4985743463039398,
+      -0.12464358657598495
+    ]
+  ],
+  "output": "AliceButler/electron/media/wave.webm",
+  "frames": 240,
+  "bytes": 1113100,
+  "alphaPresent": true,
+  "maxOpaqueBlackRatio": 0.00047743055555555554,
+  "firstBodyBBoxPxAlpha32": {
+    "x0": 221,
+    "y0": 61,
+    "x1": 433,
+    "y1": 306,
+    "width": 212,
+    "height": 245,
+    "components": 1,
+    "largestArea": 33238
+  },
+  "lastBodyBBoxPxAlpha32": {
+    "x0": 217,
+    "y0": 57,
+    "x1": 430,
+    "y1": 305,
+    "width": 213,
+    "height": 248,
+    "components": 1,
+    "largestArea": 32646
+  },
+  "firstBodyBBoxPxAlpha128": {
+    "x0": 221,
+    "y0": 61,
+    "x1": 433,
+    "y1": 306,
+    "width": 212,
+    "height": 245,
+    "components": 1,
+    "largestArea": 33081
+  },
+  "firstBodyBBoxPercent": {
+    "left": 0.3453125,
+    "right": 0.6765625,
+    "top": 0.16944444444444445,
+    "foot": 0.85,
+    "center": 0.5109375,
+    "width": 0.33125,
+    "height": 0.6805555555555556
+  },
+  "targetError": {
+    "topPx": 0.20000000000000284,
+    "footPx": 0.0,
+    "heightPx": 0.19999999999998863,
+    "centerPx": 0.6000000000000227,
+    "actual": {
+      "left": 0.3453125,
+      "right": 0.6765625,
+      "top": 0.16944444444444445,
+      "foot": 0.85,
+      "center": 0.5109375,
+      "width": 0.33125,
+      "height": 0.6805555555555556
+    }
+  },
+  "topRangePercent": [
+    0.15833333333333333,
+    0.18888888888888888
+  ],
+  "footRangePercent": [
+    0.8472222222222222,
+    0.85
+  ],
+  "maxDetachedComponents": 1,
+  "loopSeam": {
+    "exact": false,
+    "rgbaMeanAbsoluteError": 5.5438454861111115,
+    "maxChannelDelta": 255,
+    "changedChannels": 110860
+  }
+}

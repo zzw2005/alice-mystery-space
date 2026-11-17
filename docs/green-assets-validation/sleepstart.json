@@ -1,0 +1,105 @@
+{
+  "clip": "sleepstart",
+  "source": "clips-green/v2/sleepstart.mp4",
+  "sourceSha256": "00c6199bfd7f9a2fde4314442d377bc8089442febce84a393d606e4caa58f9cf",
+  "sourceSize": [
+    640,
+    360
+  ],
+  "sourceFps": 24.0,
+  "mode": "once",
+  "encodingProfile": "vp9-alpha-sleep-crf24",
+  "calibration": "standing",
+  "calibrationTarget": {
+    "center": 0.51,
+    "top": 0.17,
+    "foot": 0.85,
+    "height": 0.68
+  },
+  "fixedAffine": [
+    [
+      0.5006135106086731,
+      0.0,
+      -0.5006135106086731
+    ],
+    [
+      0.0,
+      0.5006135106086731,
+      -0.37546011805534363
+    ]
+  ],
+  "output": "AliceButler/electron/media/sleepstart.webm",
+  "frames": 240,
+  "bytes": 1002736,
+  "alphaPresent": true,
+  "maxOpaqueBlackRatio": 0.0017491319444444444,
+  "firstBodyBBoxPxAlpha32": {
+    "x0": 222,
+    "y0": 61,
+    "x1": 431,
+    "y1": 306,
+    "width": 209,
+    "height": 245,
+    "components": 1,
+    "largestArea": 32574
+  },
+  "lastBodyBBoxPxAlpha32": {
+    "x0": 235,
+    "y0": 119,
+    "x1": 419,
+    "y1": 306,
+    "width": 184,
+    "height": 187,
+    "components": 1,
+    "largestArea": 22216
+  },
+  "firstBodyBBoxPxAlpha128": {
+    "x0": 222,
+    "y0": 62,
+    "x1": 431,
+    "y1": 306,
+    "width": 209,
+    "height": 244,
+    "components": 1,
+    "largestArea": 32445
+  },
+  "firstBodyBBoxPercent": {
+    "left": 0.346875,
+    "right": 0.6734375,
+    "top": 0.16944444444444445,
+    "foot": 0.85,
+    "center": 0.51015625,
+    "width": 0.3265625,
+    "height": 0.6805555555555556
+  },
+  "targetError": {
+    "topPx": 0.20000000000000284,
+    "footPx": 0.0,
+    "heightPx": 0.19999999999998863,
+    "centerPx": 0.10000000000002274,
+    "actual": {
+      "left": 0.346875,
+      "right": 0.6734375,
+      "top": 0.16944444444444445,
+      "foot": 0.85,
+      "center": 0.51015625,
+      "width": 0.3265625,
+      "height": 0.6805555555555556
+    }
+  },
+  "topRangePercent": [
+    0.16944444444444445,
+    0.33055555555555555
+  ],
+  "footRangePercent": [
+    0.8472222222222222,
+    0.85
+  ],
+  "maxDetachedComponents": 28,
+  "loopSeam": {
+    "exact": false,
+    "rgbaMeanAbsoluteError": 12.612585720486111,
+    "maxChannelDelta": 255,
+    "changedChannels": 118939
+  }
+}

@@ -1,5 +1,9 @@
 # 艾莉丝的神秘空间
 
+> 当前重建线：Electron＋TypeScript＋原生 video VP9-alpha，正式源位于 `AliceButler/electron/`。旧 WinForms `pet*.cs` 保留为归档源码；旧动作帧与黑底源视频已按主线 `4c43f67` 全量删除。新素材只加工 `clips-green/v2/` 的绿幕视频；素材与接缝限制见 `docs/green-assets-validation.md`，开发/打包见 `AliceButler/electron/README.md`。下方旧 WinForms 架构和黑底流程为历史记录，不再用于当前动作。
+
+新部署入口仍为 `tools/deploy-pet.sh`，调用 `deploy-electron.ps1` 校验完整包、备份覆盖文件、启动既有 AlicePetLaunch 并检查冒烟 done 回执。exe 沿用 AlicePetNew.exe；runner/watchdog/计划任务与 ACL 不变。旧部署脚本归档于 `tools/archive/deploy-pet-winforms.sh`。
+
 桌宠「艾莉丝」（AliceButler）的完整仓库：程序源码、全部动画素材、动画制作流程与部署工具都在这里。后续开发（GPT / Codex）直接在本仓进行。
 
 ## 她是谁
@@ -12,13 +16,10 @@
 
 | 路径 | 内容 |
 |---|---|
-| `AliceButler/` | **部署源（唯一权威）**：桌宠 C# 源码（pet.cs ＋ 6 个 partial）、runner.js、watchdog.js、四份架构文档（ARCHITECTURE / MODULE-MAP / PROTOCOL / CHANGE-DISCIPLINE）、butler-config.json、assets/ 全部动画帧 |
-| `AliceButler/assets/anim60/` | 60 帧动画 15 段（视频管线产物，400×462） |
-| `AliceButler/assets/anim-flat/` | 扁平风动画 12 段（520×600 / 400×462） |
-| `AliceButler/assets/sprites/` | 精灵图动画 4 段（呼吸/走路/打盹/爱心） |
-| `clips-flat2/` | anim60 的源视频（黑底） |
-| `clips/`、`clips-flat/`、`clips60/` | 其余各批动画源视频 |
-| `sprite-frames/` | 精灵图源帧 |
+| `AliceButler/electron/` | **当前播放器**：Electron/TypeScript 源码、九段正式动作配置、测试与 640×360 VP9-alpha WebM |
+| `AliceButler/` | 管家、看门狗、部署兼容文件；旧 WinForms `pet*.cs` 保留为归档源码 |
+| `AliceButler/assets/` | 仅保留头像与静态形象图；旧 `anim/`、`anim-flat/`、`anim60/`、`sprites/` 已删除 |
+| `clips-green/v2/` | 九段正式绿幕源视频与锚图 |
 | `process60.py`、`process60b.py` | 60 帧管线：抽帧→minterpolate 插帧→抠像→归一化 |
 | `process_clips.py`、`process_clips_flat.py`、`process_clips_flat2.py` | 扁平风动画管线 |
 | `rekey_all.py` | **黑底重抠像**（见下方红线） |
@@ -31,17 +32,21 @@
 
 ## 动画制作流程
 
-1. 按 `docs/动作视频提示词配方.md` 生成源视频（黑底、角色居中、动作完整）。
-2. 跑对应管线脚本抽帧、插帧、归一化到 400×462（或 520×600）。
-3. **抠像红线**：源视频是黑底，必须用黑底抠像（`rekey_all.py` 的做法：边缘连通域洪泛＋光晕羽化）。历史上管线误用了绿幕抠像，黑底整块残留成「黑框」，2026-11-17 已全量重抠修复——新素材入仓前逐段验：不透明纯黑像素占比应 <5%。
-4. 量化（`quantize60b.py` 同款参数）后放入 `AliceButler/assets/` 对应分组，在 pet.Clips.cs 的片段表里登记（名字、帧率、循环/单次、接线点）。
+1. 正式新动作以 `clips-green/v2/<name>.mp4` 入仓，源规范为纯绿幕、固定站位、动作分段；不再从黑底旧素材转码。
+2. 运行 `py tools/process-green.py --ffmpeg <ffmpeg.exe> --clip <name>`。处理器执行 HSV 绿幕抠像、去绿溢色、固定仿射归一化，并编码 640×360 VP9-alpha WebM 到 `AliceButler/electron/media/`。
+3. 站姿按人物宽约 33%、头顶 17%、脚底 85%、中心 51% 对齐；睡姿按头顶 33%、脚底 85%、中心 51% 对齐。人物宽度由原图比例决定，不横向拉伸。doze 的 Zzz 等分离特效必须保留。
+4. `idle`、`walk`、`doze` 循环片必须通过解码后首尾 RGBA 完全一致检查；每段还必须通过逐帧 alpha 存在、不透明纯黑 <5% 和 640×360/24fps 检查。逐段结果写入 `docs/green-assets-validation/<name>.json`。
+5. 睡眠接缝按主线 `4b1a5da` 的源片锚定：`sleepstart` 尾 24 帧拉向 `doze` 首帧，`wakeup` 首 24 帧拉向 `doze` 末帧、尾 24 帧拉向 `idle` 首帧；两段过渡片使用 CRF 24 高码率有损 VP9 和双端关键帧，目标单段约 1MB，三处接缝 MAE 必须 <0.5。
+6. 动作池、权重和点击防连抽只在 `AliceButler/electron/config.json` 接线；缺动作等待艾莉丝后续入仓，不自行生成视频。
+
+旧动画目录及黑底源视频目录已经删除，不再从本仓恢复。文末遗留的 WinForms/黑底说明只记录历史，不是当前动作来源。
 
 ## 部署
 
 - 目标机：主人 Windows 电脑，运行目录 `C:\ProgramData\AliceButler\`，计划任务 AliceButler（管家）＋ AlicePetLaunch（桌宠）＋ AliceButlerWatchdog（看门狗）。
-- 一键部署：`tools/deploy-pet.sh`（素材变更加 `--assets`）；它会推源码→逐文件哈希校验→编译到临时 exe→验新鲜→换版→拉起→冒烟自检，失败自动回滚上一版。
+- 先运行 `npm run package`，再执行 `tools/deploy-pet.sh`。脚本会逐文件暂存并校验 → 写暂停标记并停止旧 WinForms → 把旧 `anim/anim-flat/anim60/sprites` 原子移入本次备份 → 换入 Electron → 通过既有 AlicePetLaunch 拉起 → 检查新 video 启动日志/心跳和 runner 冒烟回执 `exitCode=0`；失败自动恢复文件与旧素材。
 - 生产二进制名是 **AlicePetNew.exe**（原名 AlicePet.exe 被杀软按文件名拦截，别改回去）。
-- 编译器：`C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe`，引用 System / System.Drawing / System.Windows.Forms / System.Web.Extensions，多文件清单见 deploy-pet.sh。
+- Electron 生产包包含 Chromium/Electron 与全部九段 WebM，不再依赖 `.NET Framework` 编译。
 - **部署源只在本仓维护，禁止直接改目标机上的副本。**
 
 ## 架构与纪律

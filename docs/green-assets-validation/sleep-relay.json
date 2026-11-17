@@ -1,0 +1,35 @@
+{
+  "sequence": [
+    "sleepstart",
+    "doze",
+    "wakeup",
+    "idle"
+  ],
+  "runtimeRelayTested": true,
+  "crossfadeMs": 180,
+  "sourceMainlineCommit": "4b1a5da929f8db2cbfaca8ba37419ddf7aa8a9bc",
+  "anchorFrames": 24,
+  "seams": {
+    "sleepstart-doze": {
+      "exact": false,
+      "rgbaMeanAbsoluteError": 0.13288519965277779,
+      "maxChannelDelta": 15,
+      "changedChannels": 58648
+    },
+    "doze-wakeup": {
+      "exact": false,
+      "rgbaMeanAbsoluteError": 0.13288519965277779,
+      "maxChannelDelta": 15,
+      "changedChannels": 58648
+    },
+    "wakeup-idle": {
+      "exact": false,
+      "rgbaMeanAbsoluteError": 0.194609375,
+      "maxChannelDelta": 17,
+      "changedChannels": 85426
+    }
+  },
+  "encodingProfile": "vp9-alpha-sleep-crf24",
+  "maeGate": 0.5,
+  "note": "Mainline v5 sources carry endpoint anchors. The pipeline reapplies 24-frame anchors after keying and normalization and uses CRF 24 lossy VP9 with endpoint key frames. All processed seams pass the MAE<0.5 gate. The 180 ms crossfade remains insurance."
+}
