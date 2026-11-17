@@ -17,6 +17,10 @@ node tests/deployed-nine-clip-smoke.cjs
 
 该检查用隔离的 `ALICE_PET_ROOT` 和隐藏窗口启动生产包，不会读写正式聊天通道。
 
+单段素材更新使用 `tools/deploy-pet.sh --asset idle`：脚本只替换生产包中的
+`resources/app/media/idle.webm`，在部署前后校验其余八段哈希不变，并执行
+新实例启动、心跳和 runner 冒烟。
+
 ## 动作与素材
 
 `config.json` 是运行时动作配置，保存后约 2 秒重载；坏配置保留上一份有效配置并记录错误。idle/turn/drag/clicks/moves 各自权重抽选，多候选排除上次动作。待机池中的 `idle` 标为循环、`wave` 标为单次；三段点击共用 `clicks` 池。`provisional:true` 明确标注借用动作，尚不等于正式对应素材。

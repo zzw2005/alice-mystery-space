@@ -45,6 +45,7 @@
 
 - 目标机：主人 Windows 电脑，运行目录 `C:\ProgramData\AliceButler\`，计划任务 AliceButler（管家）＋ AlicePetLaunch（桌宠）＋ AliceButlerWatchdog（看门狗）。
 - 先运行 `npm run package`，再执行 `tools/deploy-pet.sh`。脚本会逐文件暂存并校验 → 写暂停标记并停止旧 WinForms → 把旧 `anim/anim-flat/anim60/sprites` 原子移入本次备份 → 换入 Electron → 通过既有 AlicePetLaunch 拉起 → 检查新 video 启动日志/心跳和 runner 冒烟回执 `exitCode=0`；失败自动恢复文件与旧素材。
+- 单段素材替换使用 `tools/deploy-pet.sh --asset idle`；脚本只修改目标段并校验其余八段哈希不变。
 - 生产二进制名是 **AlicePetNew.exe**（原名 AlicePet.exe 被杀软按文件名拦截，别改回去）。
 - Electron 生产包包含 Chromium/Electron 与全部九段 WebM，不再依赖 `.NET Framework` 编译。
 - **部署源只在本仓维护，禁止直接改目标机上的副本。**
