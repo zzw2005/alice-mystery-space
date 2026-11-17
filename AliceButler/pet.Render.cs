@@ -31,9 +31,12 @@ namespace AlicePet
             bool flip = dir < 0;
             if (mode == "walk")
             {
+                // static fallback follows the walk sprite's facing: source faces
+                // left, so the flipped still is the right-facing one
+                bool wf = dir > 0;
                 bool tilt = (walkTiltPhase / 8) % 2 == 0;
-                if (tilt) return flip ? "tiltRF" : "tiltR";
-                return flip ? "baseF" : "base";
+                if (tilt) return wf ? "tiltRF" : "tiltR";
+                return wf ? "baseF" : "base";
             }
             if (mode == "drag" || mode == "air")
             {

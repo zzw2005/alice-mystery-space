@@ -93,7 +93,9 @@ namespace AlicePet
             if (name == null || !clips.ContainsKey(name)) return null;
             var cs = clips[name];
             if (clipIdx >= cs.Count) clipIdx = 0;
-            return cs.Get(clipIdx, dir < 0 && name == "walk");
+            // walk sprite faces LEFT in its source frames (hair trails right):
+            // flip only when running right, never when running left
+            return cs.Get(clipIdx, dir > 0 && name == "walk");
         }
 
         bool AdvanceOne(string name)
@@ -151,7 +153,7 @@ namespace AlicePet
             if (name != null && clips.ContainsKey(name))
             {
                 var cs = clips[name];
-                bool fl = dir < 0 && name == "walk";
+                bool fl = dir > 0 && name == "walk";
                 for (int k = 1; k <= 12; k++) EnqueueDecode(cs, (clipIdx + k) % cs.Count, fl);
             }
             Render(true);
