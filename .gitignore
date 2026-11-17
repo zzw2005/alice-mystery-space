@@ -1,3 +1,6 @@
 .git/
 *.tmp.png
 __pycache__/
+
+# 生成工具缩略图缓存
+.thumbnails/
