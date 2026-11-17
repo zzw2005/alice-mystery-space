@@ -31,8 +31,14 @@ if (!executable) throw new Error('Pass the packaged AlicePetNew.exe path');
     }
     if (!testReady) throw new Error('Test interface did not initialize');
     const config = require('../config.json');
+    const selected = process.env.ALICE_SMOKE_CLIPS
+      ? process.env.ALICE_SMOKE_CLIPS.split(',').map(name => name.trim()).filter(Boolean)
+      : Object.keys(config.clips);
+    for (const clip of selected) {
+      if (!config.clips[clip]) throw new Error(`Unknown smoke clip: ${clip}`);
+    }
     const clips = {};
-    for (const clip of Object.keys(config.clips)) {
+    for (const clip of selected) {
       const token = await app.evaluate((_electron, name) => global.aliceTest.play(name), clip);
       await pet.waitForFunction(value => {
         const actor = document.querySelector('#actor');
