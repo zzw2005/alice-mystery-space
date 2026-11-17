@@ -1,9 +1,10 @@
 # Invoked only through deploy-pet.sh. Does not change runner, watchdog, ACLs or task definitions.
 [CmdletBinding()]
-param([switch]$VerifyOnly, [string]$ReportPath = (Join-Path $PSScriptRoot '../docs/electron-deploy-result.json'))
+param([switch]$VerifyOnly, [string]$ReportPath)
 $ErrorActionPreference = 'Stop'
 $package = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../AliceButler/electron/release/AlicePetNew-win32-x64'))
 $target = 'C:\ProgramData\AliceButler'
+if (!$ReportPath) { $ReportPath = Join-Path $target 'electron-deploy-result.json' }
 $files = @(Get-ChildItem -LiteralPath $package -File -Recurse)
 if (!(Test-Path -LiteralPath (Join-Path $package 'AlicePetNew.exe')) -or !(Test-Path -LiteralPath (Join-Path $package 'resources/app/dist/main/main.js'))) { throw 'Build npm run package first' }
 if (!(Test-Path -LiteralPath (Join-Path $package 'resources/app/media/doze.webm'))) { throw 'Missing packaged videos' }
