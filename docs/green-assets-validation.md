@@ -52,6 +52,25 @@ Per-clip machine-readable evidence is in
 `docs/green-assets-validation/<clip>.json`; first/last decoded PNGs are in
 `docs/green-assets-validation/previews/`.
 
+## Sleep Relay Boundary Evidence
+
+The runtime sequence `sleepstart -> doze -> wakeup -> idle` is wired and
+tested. The source clips themselves do not share exact boundary pixels:
+
+| Boundary | Exact | RGBA MAE | Changed channels |
+|---|---:|---:|---:|
+| sleepstart tail -> doze first | no | 10.4661 | 111,240 |
+| doze tail -> wakeup first | no | 0.5647 | 61,925 |
+| wakeup tail -> idle first | no | 14.3101 | 120,524 |
+
+These measurements remain visible in the delivered sources: sleepstart's tail
+is not geometrically identical to doze's first pose, and wakeup's final
+standing scale differs from idle. The player keeps the action relay and its
+180 ms alpha crossfade, but this report does not claim pixel-perfect sleep
+transitions. Correcting those two boundaries requires new approved source
+video; the requested processing calibration cannot fix them without changing
+the character's scale or position.
+
 ## Verification
 
 - `py -m unittest discover -s tests -p test_green_pipeline.py`: 3 passed.

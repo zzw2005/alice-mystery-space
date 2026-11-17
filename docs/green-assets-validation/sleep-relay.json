@@ -1,0 +1,31 @@
+{
+  "sequence": [
+    "sleepstart",
+    "doze",
+    "wakeup",
+    "idle"
+  ],
+  "runtimeRelayTested": true,
+  "crossfadeMs": 180,
+  "seams": {
+    "sleepstart-doze": {
+      "exact": false,
+      "rgbaMeanAbsoluteError": 10.466138237847222,
+      "maxChannelDelta": 255,
+      "changedChannels": 111240
+    },
+    "doze-wakeup": {
+      "exact": false,
+      "rgbaMeanAbsoluteError": 0.5647352430555556,
+      "maxChannelDelta": 255,
+      "changedChannels": 61925
+    },
+    "wakeup-idle": {
+      "exact": false,
+      "rgbaMeanAbsoluteError": 14.310123697916667,
+      "maxChannelDelta": 255,
+      "changedChannels": 120524
+    }
+  },
+  "note": "Runtime relay passes, but the approved source clips do not have exact boundary geometry. Replacing these sources is required for pixel-perfect sleep seams; processing must not alter character scale or position."
+}
