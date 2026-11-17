@@ -1,0 +1,153 @@
+{
+  "clips": {
+    "idle": {
+      "file": "idle.webm"
+    },
+    "walk": {
+      "file": "walk.webm",
+      "facing": "right"
+    },
+    "wave": {
+      "file": "wave.webm"
+    },
+    "sleepstart": {
+      "file": "sleepstart.webm"
+    },
+    "doze": {
+      "file": "doze.webm"
+    },
+    "wakeup": {
+      "file": "wakeup.webm"
+    },
+    "clickhappy": {
+      "file": "clickhappy.webm"
+    },
+    "clickshy": {
+      "file": "clickshy.webm"
+    },
+    "clicktsun": {
+      "file": "clicktsun.webm"
+    }
+  },
+  "animations": {
+    "idle": [
+      {
+        "clip": "idle",
+        "weight": 10,
+        "loop": true
+      },
+      {
+        "clip": "wave",
+        "weight": 1,
+        "loop": false
+      }
+    ],
+    "turn": [
+      {
+        "clip": "wave",
+        "weight": 1,
+        "provisional": true
+      }
+    ],
+    "drag": [
+      {
+        "clip": "idle",
+        "weight": 1,
+        "provisional": true
+      }
+    ],
+    "clicks": [
+      {
+        "clip": "clickhappy",
+        "weight": 3
+      },
+      {
+        "clip": "clickshy",
+        "weight": 2
+      },
+      {
+        "clip": "clicktsun",
+        "weight": 2
+      }
+    ],
+    "moves": [
+      {
+        "clip": "walk",
+        "weight": 1
+      }
+    ],
+    "sleep": {
+      "start": [
+        {
+          "clip": "sleepstart",
+          "weight": 1
+        }
+      ],
+      "loop": [
+        {
+          "clip": "doze",
+          "weight": 1
+        }
+      ],
+      "end": [
+        {
+          "clip": "wakeup",
+          "weight": 1
+        }
+      ]
+    },
+    "workStatus": {
+      "thinking": [
+        {
+          "clip": "idle",
+          "weight": 1,
+          "provisional": true
+        }
+      ],
+      "working": [
+        {
+          "clip": "idle",
+          "weight": 1,
+          "provisional": true
+        }
+      ],
+      "result": [
+        {
+          "clip": "idle",
+          "weight": 1,
+          "provisional": true
+        }
+      ],
+      "waiting": [
+        {
+          "clip": "idle",
+          "weight": 1,
+          "provisional": true
+        }
+      ],
+      "success": [
+        {
+          "clip": "wave",
+          "weight": 1,
+          "provisional": true
+        }
+      ],
+      "error": [
+        {
+          "clip": "wave",
+          "weight": 1,
+          "provisional": true
+        }
+      ]
+    }
+  },
+  "animationWeights": {
+    "idle": 10,
+    "turn": 2,
+    "moves": 3
+  },
+  "idleSeconds": [
+    45,
+    95
+  ]
+}

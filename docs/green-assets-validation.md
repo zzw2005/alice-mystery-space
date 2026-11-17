@@ -1,18 +1,68 @@
-# 绿幕新素材验收
+# Green Animation Asset Validation
 
-2026-11-18（东京时间）。来源仅为本仓正式 v2 九段，未转换旧 22 段，未自行生成视频，未使用参考仓素材。原文件与两张批准锚图原样保留。
+Validation date: 2026-11-18 (Asia/Tokyo). The complete formal action set is
+the nine files in `clips-green/v2/`. The pipeline did not read, convert, or
+restore the legacy 22 animations, and it did not generate any video.
 
-管线：HSV 绿色抠像、边缘去绿溢色、预乘 alpha 缩放、每段固定变换归一、VP9-alpha 640×360 / 原 24fps。睡眠循环和醒来按入睡尾姿的坐姿高度/脚底对齐，未逐帧重新居中。OpenCV 的中文路径图片读取改用 Pillow，视频由 ffmpeg 后端读取。
+## Processing Contract
 
-逐帧数值见 `green-assets-validation.json`：每段 240 帧，libvpx-vp9 强制解码 alpha 后检测（ffmpeg 默认原生 VP9 解码可能丢 alpha，不能用它判断黑框）。不透明纯黑按 RGB<5 且 alpha≥250 统计，逐帧均 <5%；合成透明背景存在。
+- Source key: HSV green key with feathered alpha and edge-only green-spill
+  suppression.
+- Canvas and playback: 640x360, source 24 fps, VP9-alpha (`yuva420p`) WebM.
+- Body measurement: the largest connected alpha component at alpha > 32.
+  Detached effects such as the Zzz marks are retained but excluded from body
+  placement.
+- Standing calibration: center 51%, top 17%, foot 85%, body height 68%.
+- Sleeping calibration: center 51%, top 33%, foot 85%, body height 52%.
+- Every frame in one clip uses the same affine transform. The width comes from
+  the source pose and aspect ratio; the pipeline does not stretch the Q-style
+  body horizontally.
+- `idle`, `walk`, and `doze` have identical decoded first/last RGBA frames.
+  Non-loop clips intentionally retain their action endpoints.
+- All decoded frames contain alpha. Opaque pure black is below 5% in every
+  frame of every clip.
 
-## 不能声明通过的项目
+## First-Frame Body Measurement
 
-- 睡眠三段源视频虽已获准使用，但解码后「入睡尾→循环首」「循环尾→循环首」「循环尾→醒来首」「醒来尾→入睡首」均非逐像素相等。数值如实记录，视频播放器的 180ms 交叠只减轻可见跳变，不改变此结论。
-- 入睡段坐下后轮廓较宽；doze/wakeup 与入睡来自不同缩放。固定归一后可对齐脚底和睡姿高度，但醒来末尾的站立高度仍小于标准待机，属于源视频内部比例变化。若要求完全一致，需要艾莉丝确认后重做 wakeup 及睡眠接缝，当前不自行重产。
-- idle 首尾有轻微姿态差，walk 原片有漂移且为半侧面，尾姿与开头不同；clickhappy 包含小跳，脚底变化是动作内容。保留原动作，不扭曲人物去伪造端点一致。
-- 所有普通动作首尾均不保证逐像素一致；入仓报告列出 first/last bbox、整段顶/脚范围及端点差。达到 alpha/黑框门，不等于达到最终美术无缝门。
+Percentages are calculated from the 640x360 frame using alpha > 32.
 
-重产清单更新：v2 idle/walk/wave/clickhappy/clickshy/clicktsun 已交付，不再列为缺失；尚缺专用 turn、dragdangle、love、thinking/working/tidying/pacing、celebrate/sigh、sit/water/fish/wiggle/yawn/startled。配置中暂借新角色视频的项标为 provisional，待确认后由艾莉丝生产。
+| Clip | Mode | BBox px `[left,top,right,foot]` | Left | Right | Top | Foot | Width | Height | Center | Bytes |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| idle | loop | 221, 61, 432, 306 | 34.53% | 67.50% | 16.94% | 85.00% | 32.97% | 68.06% | 51.02% | 4,543,101 |
+| walk | loop | 221, 61, 433, 306 | 34.53% | 67.66% | 16.94% | 85.00% | 33.13% | 68.06% | 51.09% | 5,760,282 |
+| wave | once | 221, 61, 433, 306 | 34.53% | 67.66% | 16.94% | 85.00% | 33.13% | 68.06% | 51.09% | 1,113,100 |
+| clickhappy | once | 221, 61, 432, 306 | 34.53% | 67.50% | 16.94% | 85.00% | 32.97% | 68.06% | 51.02% | 823,553 |
+| clickshy | once | 223, 61, 430, 306 | 34.84% | 67.19% | 16.94% | 85.00% | 32.34% | 68.06% | 51.02% | 661,080 |
+| clicktsun | once | 223, 61, 430, 306 | 34.84% | 67.19% | 16.94% | 85.00% | 32.34% | 68.06% | 51.02% | 712,291 |
+| sleepstart | once | 222, 61, 432, 306 | 34.69% | 67.50% | 16.94% | 85.00% | 32.81% | 68.06% | 51.09% | 594,350 |
+| doze | loop | 235, 119, 419, 306 | 36.72% | 65.47% | 33.06% | 85.00% | 28.75% | 51.94% | 51.09% | 4,271,743 |
+| wakeup | once | 235, 119, 419, 306 | 36.72% | 65.47% | 33.06% | 85.00% | 28.75% | 51.94% | 51.09% | 430,876 |
 
-验证：`py -m unittest discover -s tests -p test_green_pipeline.py` 2 项通过；九段完整编码与逐帧解码检查通过。不包含生产部署结论。
+The first-frame height error against the requested calibration is 0.2 px for
+all nine clips. Standing horizontal-center error is at most 0.6 px. All
+standing clips keep their source aspect ratio; the measured visible width is
+32.34-33.13%, compatible with the specified approximately 33% Q-style body.
+
+The `doze` report observes up to 15 detached alpha components in a frame,
+confirming that the built-in Zzz/effects survive keying. Its decoded first and
+last frames are byte-for-byte RGBA-equal. The same exact loop-seam check passes
+for `idle` and `walk`.
+
+Per-clip machine-readable evidence is in
+`docs/green-assets-validation/<clip>.json`; first/last decoded PNGs are in
+`docs/green-assets-validation/previews/`.
+
+## Verification
+
+- `py -m unittest discover -s tests -p test_green_pipeline.py`: 3 passed.
+- Full decode of all nine WebMs: 240 frames each, 24 fps, 640x360, alpha
+  present, and maximum opaque-black ratio below 5% per frame.
+- Electron integration, hidden windows with an isolated runtime directory:
+  all nine clips played, alpha decoded, sleep relay completed, and renderer
+  page-error list was empty.
+- Player tests cover weighted non-repeating picks, idle-loop versus
+  wave-one-shot behavior, click scheduling, sleep relay, and presence fallback.
+
+Total current video payload: 18,910,376 bytes (18.03 MiB). Loop clips use
+lossless VP9 plus explicit terminal key frames so their decoded endpoints are
+exactly equal; one-shot clips remain CRF 28.

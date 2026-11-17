@@ -1,5 +1,9 @@
 # 艾莉丝的神秘空间
 
+> 当前重建线：Electron＋TypeScript＋原生 video VP9-alpha，正式源位于 `AliceButler/electron/`。旧 WinForms `pet*.cs` 与旧动画保留归档，不删除。新素材只加工 `clips-green/v2/` 的绿幕视频，不转换旧 22 段；素材与接缝限制见 `docs/green-assets-validation.md`。重建范围与待确认重产清单见 `docs/electron-rebuild.md`，开发/打包见 `AliceButler/electron/README.md`。下方旧 WinForms 架构和黑底流程为历史记录，不再用于本次新动画。
+
+新部署入口仍为 `tools/deploy-pet.sh`，调用 `deploy-electron.ps1` 校验完整包、备份覆盖文件、启动既有 AlicePetLaunch 并检查冒烟 done 回执。exe 沿用 AlicePetNew.exe；runner/watchdog/计划任务与 ACL 不变。旧部署脚本归档于 `tools/archive/deploy-pet-winforms.sh`。
+
 桌宠「艾莉丝」（AliceButler）的完整仓库：程序源码、全部动画素材、动画制作流程与部署工具都在这里。后续开发（GPT / Codex）直接在本仓进行。
 
 ## 她是谁
@@ -31,10 +35,13 @@
 
 ## 动画制作流程
 
-1. 按 `docs/动作视频提示词配方.md` 生成源视频（黑底、角色居中、动作完整）。
-2. 跑对应管线脚本抽帧、插帧、归一化到 400×462（或 520×600）。
-3. **抠像红线**：源视频是黑底，必须用黑底抠像（`rekey_all.py` 的做法：边缘连通域洪泛＋光晕羽化）。历史上管线误用了绿幕抠像，黑底整块残留成「黑框」，2026-11-17 已全量重抠修复——新素材入仓前逐段验：不透明纯黑像素占比应 <5%。
-4. 量化（`quantize60b.py` 同款参数）后放入 `AliceButler/assets/` 对应分组，在 pet.Clips.cs 的片段表里登记（名字、帧率、循环/单次、接线点）。
+1. 正式新动作以 `clips-green/v2/<name>.mp4` 入仓，源规范为纯绿幕、固定站位、动作分段；不再从黑底旧素材转码。
+2. 运行 `py tools/process-green.py --ffmpeg <ffmpeg.exe> --clip <name>`。处理器执行 HSV 绿幕抠像、去绿溢色、固定仿射归一化，并编码 640×360 VP9-alpha WebM 到 `AliceButler/electron/media/`。
+3. 站姿按人物宽约 33%、头顶 17%、脚底 85%、中心 51% 对齐；睡姿按头顶 33%、脚底 85%、中心 51% 对齐。人物宽度由原图比例决定，不横向拉伸。doze 的 Zzz 等分离特效必须保留。
+4. `idle`、`walk`、`doze` 循环片必须通过解码后首尾 RGBA 完全一致检查；每段还必须通过逐帧 alpha 存在、不透明纯黑 <5% 和 640×360/24fps 检查。逐段结果写入 `docs/green-assets-validation/<name>.json`。
+5. 动作池、权重和点击防连抽只在 `AliceButler/electron/config.json` 接线；缺动作等待艾莉丝后续入仓，不自行生成视频。
+
+旧 `AliceButler/assets/anim60/`、`anim-flat/`、`sprites/` 与下方黑底管线是历史 WinForms 资料，仅供归档与回滚，不是当前正式动作来源。
 
 ## 部署
 

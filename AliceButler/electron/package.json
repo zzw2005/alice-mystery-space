@@ -1,0 +1,21 @@
+{
+  "name": "alice-butler-pet",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Alice desktop pet; file protocol compatible with AliceButler",
+  "main": "dist/main/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.main.json && tsc -p tsconfig.renderer.json",
+    "test": "npm run build && node --test tests/*.test.cjs",
+    "start": "npm run build && electron .",
+    "package": "npm run build && electron-packager . AlicePetNew --platform=win32 --arch=x64 --out=release --overwrite --ignore=release --ignore=tests --ignore=src --ignore=tsconfig --no-asar --ignore=test-results --ignore=package-lock.json --ignore=README.md",
+    "test:electron": "npm run build && node tests/electron.integration.cjs"
+  },
+  "devDependencies": {
+    "@electron/packager": "20.3.0",
+    "@types/node": "24.10.1",
+    "electron": "45.3.3",
+    "playwright": "1.65.1",
+    "typescript": "5.9.3"
+  }
+}
