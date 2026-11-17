@@ -1,0 +1,416 @@
+{
+  "sourceRevision": "f107c43f8ba1c8d9fe185ebd6f31fa8491890d3b",
+  "route": "green HSV; fixed per-clip affine; standing start registration, sleeping clips registered to approved entry tail",
+  "size": [
+    640,
+    360
+  ],
+  "clips": {
+    "sleepstart": {
+      "frames": 240,
+      "bytes": 601406,
+      "maxOpaqueBlackRatio": 0.0002690972222222222,
+      "alphaPresent": true,
+      "firstBox": [
+        220,
+        72,
+        421,
+        306
+      ],
+      "lastBox": [
+        213,
+        119,
+        423,
+        307
+      ],
+      "topRange": [
+        59,
+        120
+      ],
+      "footRange": [
+        306,
+        308
+      ],
+      "endpointMeanAbsoluteDifference": 11.001097005208333,
+      "endpointExact": false,
+      "source": "clips-green/v2/sleepstart.mp4",
+      "sourceSha256": "715cff62ebb239da6e1992b0b51c33de25f5c4c5669d26da44ffd3542b55a700",
+      "fps": 24.0,
+      "fixedAffine": [
+        [
+          0.46987950801849365,
+          0.0,
+          13.873494148254395
+        ],
+        [
+          0.0,
+          0.46987950801849365,
+          11.855422019958496
+        ]
+      ]
+    },
+    "clickhappy": {
+      "frames": 240,
+      "bytes": 872142,
+      "maxOpaqueBlackRatio": 0.00026475694444444447,
+      "alphaPresent": true,
+      "firstBox": [
+        219,
+        72,
+        421,
+        306
+      ],
+      "lastBox": [
+        216,
+        64,
+        417,
+        306
+      ],
+      "topRange": [
+        39,
+        84
+      ],
+      "footRange": [
+        268,
+        307
+      ],
+      "endpointMeanAbsoluteDifference": 5.081833767361111,
+      "endpointExact": false,
+      "source": "clips-green/v2/clickhappy.mp4",
+      "sourceSha256": "4678028610f44cfb80224ee306a15739824b32beedfaf1cdfa4421226e911520",
+      "fps": 24.0,
+      "fixedAffine": [
+        [
+          0.47560974955558777,
+          0.0,
+          9.90243911743164
+        ],
+        [
+          0.0,
+          0.47560974955558777,
+          13.97560977935791
+        ]
+      ]
+    },
+    "clickshy": {
+      "frames": 240,
+      "bytes": 676899,
+      "maxOpaqueBlackRatio": 0.00028645833333333333,
+      "alphaPresent": true,
+      "firstBox": [
+        221,
+        72,
+        419,
+        306
+      ],
+      "lastBox": [
+        222,
+        75,
+        419,
+        306
+      ],
+      "topRange": [
+        67,
+        86
+      ],
+      "footRange": [
+        305,
+        306
+      ],
+      "endpointMeanAbsoluteDifference": 4.237520616319444,
+      "endpointExact": false,
+      "source": "clips-green/v2/clickshy.mp4",
+      "sourceSha256": "5180ef77c1ecc3c8f55d19096212c2ac8c7fb09b9c9e6a0316564eb2ec010185",
+      "fps": 24.0,
+      "fixedAffine": [
+        [
+          0.4661354720592499,
+          0.0,
+          16.079681396484375
+        ],
+        [
+          0.0,
+          0.4661354720592499,
+          13.266932487487793
+        ]
+      ]
+    },
+    "clicktsun": {
+      "frames": 240,
+      "bytes": 706557,
+      "maxOpaqueBlackRatio": 0.00015625,
+      "alphaPresent": true,
+      "firstBox": [
+        221,
+        72,
+        419,
+        306
+      ],
+      "lastBox": [
+        220,
+        75,
+        417,
+        307
+      ],
+      "topRange": [
+        63,
+        86
+      ],
+      "footRange": [
+        305,
+        309
+      ],
+      "endpointMeanAbsoluteDifference": 4.862060546875,
+      "endpointExact": false,
+      "source": "clips-green/v2/clicktsun.mp4",
+      "sourceSha256": "f9458517752167b4397343577d909d192deeba05a9de540e775c9f8cc2aa4442",
+      "fps": 24.0,
+      "fixedAffine": [
+        [
+          0.46706587076187134,
+          0.0,
+          15.473053932189941
+        ],
+        [
+          0.0,
+          0.46706587076187134,
+          13.149700164794922
+        ]
+      ]
+    },
+    "doze": {
+      "frames": 240,
+      "bytes": 874627,
+      "maxOpaqueBlackRatio": 4.340277777777778e-05,
+      "alphaPresent": true,
+      "firstBox": [
+        226,
+        119,
+        411,
+        307
+      ],
+      "lastBox": [
+        227,
+        119,
+        411,
+        307
+      ],
+      "topRange": [
+        115,
+        121
+      ],
+      "footRange": [
+        307,
+        307
+      ],
+      "endpointMeanAbsoluteDifference": 1.0506781684027777,
+      "endpointExact": false,
+      "source": "clips-green/v2/doze.mp4",
+      "sourceSha256": "e89c0bb2d60ced640e208afd1578e73cb58d03decf88af74d548edf20f110308",
+      "fps": 24.0,
+      "fixedAffine": [
+        [
+          0.27167630195617676,
+          0.0,
+          143.04046630859375
+        ],
+        [
+          0.0,
+          0.27167630195617676,
+          114.65318298339844
+        ]
+      ]
+    },
+    "idle": {
+      "frames": 240,
+      "bytes": 784377,
+      "maxOpaqueBlackRatio": 0.00018663194444444445,
+      "alphaPresent": true,
+      "firstBox": [
+        220,
+        72,
+        421,
+        306
+      ],
+      "lastBox": [
+        220,
+        67,
+        424,
+        306
+      ],
+      "topRange": [
+        55,
+        72
+      ],
+      "footRange": [
+        306,
+        307
+      ],
+      "endpointMeanAbsoluteDifference": 3.728537326388889,
+      "endpointExact": false,
+      "source": "clips-green/v2/idle.mp4",
+      "sourceSha256": "c12eea494bda8ce2d3d1868db193d65efb34fab9941b93d65da6bab9db7924b5",
+      "fps": 24.0,
+      "fixedAffine": [
+        [
+          0.47560974955558777,
+          0.0,
+          10.37804889678955
+        ],
+        [
+          0.0,
+          0.47560974955558777,
+          13.5
+        ]
+      ]
+    },
+    "wakeup": {
+      "frames": 240,
+      "bytes": 466618,
+      "maxOpaqueBlackRatio": 0.0001779513888888889,
+      "alphaPresent": true,
+      "firstBox": [
+        226,
+        119,
+        411,
+        307
+      ],
+      "lastBox": [
+        261,
+        115,
+        383,
+        307
+      ],
+      "topRange": [
+        115,
+        145
+      ],
+      "footRange": [
+        304,
+        308
+      ],
+      "endpointMeanAbsoluteDifference": 9.304222005208333,
+      "endpointExact": false,
+      "source": "clips-green/v2/wakeup.mp4",
+      "sourceSha256": "abc1d36e568ad6b5c8edccd88581c8e6b09bdba9cf61a53d5c24e02c0c606590",
+      "fps": 24.0,
+      "fixedAffine": [
+        [
+          0.27167630195617676,
+          0.0,
+          143.04046630859375
+        ],
+        [
+          0.0,
+          0.27167630195617676,
+          114.65318298339844
+        ]
+      ]
+    },
+    "walk": {
+      "frames": 240,
+      "bytes": 1270712,
+      "maxOpaqueBlackRatio": 0.0008897569444444444,
+      "alphaPresent": true,
+      "firstBox": [
+        219,
+        72,
+        421,
+        306
+      ],
+      "lastBox": [
+        226,
+        65,
+        438,
+        305
+      ],
+      "topRange": [
+        61,
+        72
+      ],
+      "footRange": [
+        304,
+        308
+      ],
+      "endpointMeanAbsoluteDifference": 9.79741427951389,
+      "endpointExact": false,
+      "source": "clips-green/v2/walk.mp4",
+      "sourceSha256": "6745b8397c69dc70985c144ba8fdb104bd7e1d3b85a9a05fd9b5369a2db8e0c2",
+      "fps": 24.0,
+      "fixedAffine": [
+        [
+          0.47657841444015503,
+          0.0,
+          9.270875930786133
+        ],
+        [
+          0.0,
+          0.47657841444015503,
+          12.904276847839355
+        ]
+      ]
+    },
+    "wave": {
+      "frames": 240,
+      "bytes": 1117179,
+      "maxOpaqueBlackRatio": 0.0005121527777777778,
+      "alphaPresent": true,
+      "firstBox": [
+        219,
+        72,
+        421,
+        306
+      ],
+      "lastBox": [
+        215,
+        68,
+        419,
+        305
+      ],
+      "topRange": [
+        68,
+        79
+      ],
+      "footRange": [
+        305,
+        306
+      ],
+      "endpointMeanAbsoluteDifference": 5.065847439236111,
+      "endpointExact": false,
+      "source": "clips-green/v2/wave.mp4",
+      "sourceSha256": "318676d934d7148497f6dacbacee9e8788092dda98574fd483f43db79f6352fa",
+      "fps": 24.0,
+      "fixedAffine": [
+        [
+          0.47657841444015503,
+          0.0,
+          9.270875930786133
+        ],
+        [
+          0.0,
+          0.47657841444015503,
+          13.380855560302734
+        ]
+      ]
+    }
+  },
+  "seams": {
+    "entry-loop": {
+      "exact": false,
+      "rgbaMAE": 9.736229383680556
+    },
+    "loop-loop": {
+      "exact": false,
+      "rgbaMAE": 1.0506781684027777
+    },
+    "loop-wake": {
+      "exact": false,
+      "rgbaMAE": 1.10125
+    },
+    "wake-entry": {
+      "exact": false,
+      "rgbaMAE": 12.096362847222222
+    }
+  },
+  "totalWebmBytes": 7370517
+}
