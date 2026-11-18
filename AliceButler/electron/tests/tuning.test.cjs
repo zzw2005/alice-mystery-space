@@ -16,15 +16,17 @@ test('partial and older configs keep their weights and fill missing tuning keys'
   assert.equal(validateConfig(legacy).animationWeights.turn, 17);
   assert.deepEqual(require('../defaults.json'), config);
   assert.throws(() => readTuning({ replyPollMs: -1 }));
+  assert.throws(() => readTuning({ replyStaggerMs: 0 }));
   assert.throws(() => readTuning({ bubbleMs: 1000 }));
 });
 
 test('trigger configuration fills individual keys and validates the new inputs', () => {
-  const triggers = { clickComboEnabled: false, recentWalkWeightFactor: .25, waitingIntervalFactor: 1.5 };
+  const triggers = { clickComboEnabled: false, recentWalkWeightFactor: .25, waitingIntervalFactor: 1.5,
+    longPressMs: 700, longPressRate: .5, longPressReleaseChance: 0 };
   assert.deepEqual(validateConfig({ ...config, triggers }).triggers, { ...config.triggers, ...triggers });
   for (const triggers of [{ clickComboEnabled: 1 }, { clickComboCount: 1.5 }, { wakeProtectionMs: -1 },
-    { drowsyIntervalFactor: .5 }, { recentWalkWeightFactor: 2 }]) {
-    assert.throws(() => validateConfig({ ...config, triggers }), /trigger|walk weight|click combo/);
+    { drowsyIntervalFactor: .5 }, { recentWalkWeightFactor: 2 }, { longPressMs: -1 }, { longPressRate: 0 }, { longPressReleaseChance: 1.1 }]) {
+    assert.throws(() => validateConfig({ ...config, triggers }), /trigger|walk weight|click combo|long press/);
   }
 });
 

@@ -1,4 +1,4 @@
-import type { TriggerConfig } from './tuning';
+import type { TriggerConfig, Tuning } from './tuning';
 
 export interface InteractionConfig {
   hoverMs: number; peekCooldownMs: number; gazeSpeed: number;
@@ -6,6 +6,28 @@ export interface InteractionConfig {
   landingHeight: number; landingSpeed: number; awayMs: number; dragTiltSpeed: number; dragTiltDegrees: number;
 }
 type Point = { x: number; y: number };
+type PressState = 'pressed' | 'drag' | 'long-press' | 'wake';
+export class PointerPress {
+  state: PressState;
+  constructor(readonly start: Point, readonly at: number, wakeOnly: boolean) {
+    this.state = wakeOnly ? 'wake' : 'pressed';
+  }
+  private moved(point: Point, tuning: Tuning): boolean {
+    return Math.abs(point.x - this.start.x) + Math.abs(point.y - this.start.y) > tuning.dragDistancePx;
+  }
+  sample(point: Point, now: number, tuning: Tuning, triggers: TriggerConfig): 'drag' | 'long-press' | undefined {
+    if (this.state === 'wake' || this.state === 'drag') return;
+    if (this.moved(point, tuning)) return this.state = 'drag';
+    if (this.state === 'pressed' && now - this.at >= triggers.longPressMs) return this.state = 'long-press';
+  }
+  release(point: Point, now: number, tuning: Tuning): 'wake' | 'drag' | 'long-press' | 'click' | 'none' {
+    if (this.state === 'wake') return 'wake';
+    if (this.state === 'drag' || this.moved(point, tuning)) return 'drag';
+    if (this.state === 'long-press') return 'long-press';
+    return now - this.at < tuning.clickHoldMs ? 'click' : 'none';
+  }
+}
+
 export class Gestures {
   private last?: Point;
   private sampleAt = 0;

@@ -7,6 +7,7 @@ export interface Tuning {
   tickMs: number;
   maintenanceMs: number;
   replyPollMs: number;
+  replyStaggerMs: number;
   statusPollMs: number;
   heartbeatMs: number;
   statsMs: number;
@@ -67,6 +68,9 @@ export interface TriggerConfig {
   clickComboCount: number;
   dragProtectionMs: number;
   waitingIntervalFactor: number;
+  longPressMs: number;
+  longPressRate: number;
+  longPressReleaseChance: number;
 }
 
 const defaultTriggers: TriggerConfig = require('../../defaults.json').triggers;
@@ -75,7 +79,7 @@ export function readTriggers(input: unknown): TriggerConfig {
   if (input !== undefined && (!input || typeof input !== 'object' || Array.isArray(input))) throw Error('Invalid triggers section');
   const triggers = { ...defaultTriggers, ...input as Partial<TriggerConfig> };
   for (const key of ['interactionCooldownMs', 'recentWalkRounds', 'drowsyAfterMs', 'wakeProtectionMs',
-    'clickComboGapMs', 'clickComboCount', 'dragProtectionMs'] as const) {
+    'clickComboGapMs', 'clickComboCount', 'dragProtectionMs', 'longPressMs'] as const) {
     if (!Number.isSafeInteger(triggers[key]) || triggers[key] <= 0) throw Error('Invalid trigger parameter: ' + key);
   }
   for (const key of ['drowsyIntervalFactor', 'waitingIntervalFactor'] as const) {
@@ -84,5 +88,10 @@ export function readTriggers(input: unknown): TriggerConfig {
   if (!Number.isFinite(triggers.recentWalkWeightFactor) || triggers.recentWalkWeightFactor <= 0 || triggers.recentWalkWeightFactor > 1)
     throw Error('Invalid recent walk weight factor');
   if (typeof triggers.clickComboEnabled !== 'boolean') throw Error('Invalid click combo switch');
+  // Chromium's positive playbackRate range.
+  if (!Number.isFinite(triggers.longPressRate) || triggers.longPressRate < 1 / 16 || triggers.longPressRate > 16)
+    throw Error('Invalid long press playback rate');
+  if (!Number.isFinite(triggers.longPressReleaseChance) || triggers.longPressReleaseChance < 0 || triggers.longPressReleaseChance > 1)
+    throw Error('Invalid long press release chance');
   return triggers;
 }

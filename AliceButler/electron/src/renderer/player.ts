@@ -1,4 +1,4 @@
-export type PlayRequest = { tuning: DisplayTuning; clip: string; kind: string; loop: boolean; token: number; url: string; facing: string; direction: number };
+export type PlayRequest = { tuning: DisplayTuning; clip: string; kind: string; loop: boolean; rate: number; token: number; url: string; facing: string; direction: number };
 
 // Two bounded slots: the displayed clip and one incoming clip. A frozen canvas
 // covers native loop seeks and suspension. A transition commits only on a decoded frame.
@@ -125,6 +125,7 @@ export class Player {
     }
     this.pending?.abort(); this.pending = undefined;
     if (!reclaim && !this.suspended && this.video?.src === data.url && this.request?.loop && data.loop) {
+      this.video.playbackRate = data.rate;
       this.request = data; this.present(data, false); return;
     }
     const controller = new AbortController(); this.pending = controller;
@@ -152,6 +153,7 @@ export class Player {
           incoming.play().catch(reject);
         }, { once: true, signal });
         incoming.loop = data.loop; incoming.src = data.url; incoming.load();
+        incoming.playbackRate = data.rate;
       });
       await firstFrame;
       if (signal.aborted) return;

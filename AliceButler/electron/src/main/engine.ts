@@ -2,7 +2,37 @@ import { defaultTuning, readTriggers, readTuning, TriggerConfig, Tuning } from '
 import type { InteractionConfig } from './gestures';
 export type Presence = 'idle' | 'thinking' | 'working' | 'result' | 'waiting' | 'success' | 'error';
 export type Entry = { clip: string; weight: number; loop?: boolean; provisional?: boolean };
-export type Action = { clip: string; loop: boolean; kind: string };
+export type Action = Readonly<{ clip: string; loop: boolean; kind: string; rate: number }>;
+type WakeSource = 'pointer-wake' | 'chat-open' | 'chat-send' | 'chat-reply' | 'menu-wake';
+type SimpleSource = WakeSource | 'startup' | 'resume' | 'media-fallback' | 'animation-end' | 'placement' |
+  'config-reload' | 'hover-exit' | 'drag-release' | 'walk-end' | 'drag' | 'menu-sleep' | 'double-click' |
+  'desktop-return' | 'landing' | 'hover-peek' | 'click-startle' | 'click-combo' | 'auto-sleep' | 'random-chain' |
+  'long-press';
+export type ActionRequest = { source: SimpleSource } |
+  { source: 'presence'; state: Presence; valid: boolean } |
+  { source: 'click'; dismissPeek?: boolean } |
+  { source: 'long-press-release'; cancelled?: boolean } |
+  { source: 'test'; action: Action | 'sleep' | 'wake' };
+type Source = ActionRequest['source'];
+type Context = { now: number; motion: Physics['mode']; chatOpen: boolean };
+export type Decision = { outcome: 'played'; action: Action; source: Source } | { outcome: 'queued' | 'rejected' };
+
+// Higher entries win within the same physics tick. Lifecycle requests are also
+// accepted individually for renderer readiness, completion and error callbacks.
+const priority: Record<Source, number> = {
+  startup: 5, resume: 5, 'media-fallback': 5, 'animation-end': 5,
+  drag: 4, 'drag-release': 4, 'double-click': 4, 'long-press': 4, 'long-press-release': 4,
+  'pointer-wake': 4, 'chat-open': 4, 'chat-send': 4, 'chat-reply': 4, 'menu-wake': 4, 'menu-sleep': 4,
+  placement: 4, 'config-reload': 4, 'desktop-return': 4, landing: 4, test: 4,
+  presence: 3, click: 2, 'click-combo': 2, 'click-startle': 2, 'hover-peek': 2, 'hover-exit': 2,
+  'walk-end': 1, 'auto-sleep': 1, 'random-chain': 0
+};
+const wakes = new Set<Source>(['pointer-wake', 'chat-open', 'chat-send', 'chat-reply', 'menu-wake']);
+const reactionSources = new Set<Source>(['click', 'click-combo', 'click-startle', 'hover-peek']);
+const presenceProtected = new Set(['drag', 'long-press', 'sitdown', 'startled', 'peek', 'wave']);
+const idleAfter = new Set(['sitdown', 'peek', 'startled', 'wave']);
+const rejected = { outcome: 'rejected' } as const;
+function action(clip: string, loop: boolean, kind: string, rate = 1): Action { return { clip, loop, kind, rate }; }
 export interface PetConfig {
   tuning: Tuning;
   interaction: InteractionConfig;
@@ -39,17 +69,18 @@ export function validateConfig(input: unknown): PetConfig {
   for (const key of ['idle', 'turn', 'moves'] as const) if (!Number.isFinite(c.animationWeights[key]) || c.animationWeights[key] <= 0) throw Error('Invalid chain weight');
   if (!Array.isArray(c.idleSeconds) || c.idleSeconds.length !== 2 || c.idleSeconds.some(v => !Number.isFinite(v)) || c.idleSeconds[0] < 10 || c.idleSeconds[1] < c.idleSeconds[0] || c.idleSeconds[1] > 600) throw Error('Invalid idle interval');
   const triggers = readTriggers(c.triggers);
-  if (triggers.clickComboEnabled && !c.clips.clicktsun) throw Error('Missing click combo clip: clicktsun');
+  if (!c.clips.clicktsun) throw Error('Missing interaction clip: clicktsun');
   return { ...c, tuning: readTuning(c.tuning), triggers };
 }
 export class Director {
-  rest: 'awake' | 'entering' | 'asleep' | 'waking' = 'awake';
-  presence: Presence = 'idle';
-  current: Action = { clip: '', loop: true, kind: 'idle' };
-  queue: Action[] = [];
+  private restState: 'awake' | 'entering' | 'asleep' | 'waking' = 'awake';
+  private presenceState: Presence = 'idle';
+  private active = action('', true, 'idle');
   private last = new Map<string, string>();
+  private unavailable = new Set<string>();
   private lastInteraction?: number;
   private holdAt?: number;
+  private wakePending = false;
   private wakeEndedAt = -Infinity;
   private lastChainAt: number;
   private chainInterval: number;
@@ -59,6 +90,9 @@ export class Director {
     this.lastChainAt = startedAt;
     this.chainInterval = config.tuning.firstRandomMs;
   }
+  get rest() { return this.restState; }
+  get presence() { return this.presenceState; }
+  get current() { return this.active; }
   pickEntry(pool: Entry[], key: string): Entry {
     const candidates = pool.length > 1 ? pool.filter(e => e.clip !== this.last.get(key)) : pool;
     let ticket = this.random() * candidates.reduce((n, e) => n + e.weight, 0);
@@ -68,58 +102,149 @@ export class Director {
     return selected;
   }
   pick(pool: Entry[], key: string): string { return this.pickEntry(pool, key).clip; }
-  play(clip: string, loop: boolean, kind: string): Action { return this.current = { clip, loop, kind }; }
-  gesture(clip: 'sitdown' | 'peek' | 'startled' | 'wave'): Action {
-    this.rest = 'awake'; this.wakePending = false;
-    return this.play(clip, false, clip);
-  }
-  base(): Action {
-    if (this.rest === 'asleep') return this.play(this.pick(this.config.animations.sleep.loop, 'sleep.loop'), true, 'sleep.loop');
-    const s = this.presence;
-    if (s !== 'idle' && s !== 'success' && s !== 'error') return this.play(this.pick(this.config.animations.workStatus[s], s), true, 'work');
-    const looping = this.config.animations.idle.filter(e => e.loop !== false);
-    return this.play(this.pick(looping.length ? looping : this.config.animations.idle, 'idle.loop'), true, 'idle');
-  }
-  react(kind: 'clicks' | 'drag' | 'turn' | 'moves'): Action | null {
-    if (kind === 'drag') { this.rest = 'awake'; this.wakePending = false; }
-    else if (this.rest !== 'awake') { this.wake(); return this.current; }
-    return this.play(this.pick(this.config.animations[kind], kind), kind === 'drag' || kind === 'moves', kind);
-  }
-  click(combo: boolean): Action | null {
-    if (!combo || this.rest !== 'awake') return this.react('clicks');
-    this.last.set('clicks', 'clicktsun');
-    return this.play('clicktsun', false, 'clicks');
-  }
   interact(now: number): void { this.lastInteraction = now; }
   beginHold(now: number): void { this.holdAt = now; }
   endHold(): void { this.holdAt = undefined; }
+  replaceConfig(config: PetConfig): void { this.config = config; this.unavailable.clear(); }
   private protectedDrag(now: number): boolean {
     return this.holdAt !== undefined && now - this.holdAt >= this.config.triggers.dragProtectionMs;
   }
-  automaticAction(now: number, chatOpen: boolean): Action | null {
-    if (this.rest !== 'awake' || this.protectedDrag(now) || this.current.kind === 'drag') return null;
-    const { triggers, tuning, idleSeconds } = this.config;
-    const inactiveFor = now - (this.lastInteraction ?? this.startedAt);
-    const canDoze = this.presence === 'idle' && !chatOpen;
-    if (canDoze && inactiveFor >= tuning.idleSleepMs && now - this.wakeEndedAt >= triggers.wakeProtectionMs)
-      return this.sleep();
 
-    const waiting = this.presence === 'waiting';
-    if (this.presence !== 'idle' && !waiting) return null;
-    if (this.lastInteraction !== undefined && inactiveFor < triggers.interactionCooldownMs) return null;
+  request(requests: readonly ActionRequest[], context: Context): Decision[] {
+    const changedPresence = new Set<ActionRequest>();
+    for (const request of requests) {
+      if (request.source !== 'presence' || request.state === this.presence) continue;
+      this.presenceState = request.state;
+      if (request.valid) changedPresence.add(request);
+    }
+    const decisions: Decision[] = [];
+    let switched = false;
+    const order = requests.map((request, index) => ({ request, index }));
+    order.sort((a, b) => priority[b.request.source] - priority[a.request.source]);
+    for (const { request, index } of order) {
+      if (switched || (request.source === 'presence' && !changedPresence.has(request))) {
+        decisions[index] = rejected;
+        continue;
+      }
+      const decision = this.resolve(request, context);
+      decisions[index] = decision;
+      switched = decision.outcome === 'played';
+    }
+    return decisions;
+  }
+
+  private resolve(request: ActionRequest, context: Context): Decision {
+    const { source } = request, { now, motion, chatOpen } = context;
+    if (source === 'resume') return { outcome: 'played', source, action: this.current };
+    if (source === 'media-fallback') {
+      this.unavailable.add(this.current.clip);
+      return this.fallback();
+    }
+    if (source === 'animation-end') return this.commit(this.finish(now), source);
+    if (source === 'startup') return this.commit(this.base(), source);
+    const wake = wakes.has(source) || (source === 'test' && request.action === 'wake');
+    if (this.rest === 'entering' && wake) {
+      if (this.wakePending) return rejected;
+      this.wakePending = true;
+      return { outcome: 'queued' };
+    }
+    if (this.rest === 'entering' || this.rest === 'waking') return rejected;
+    if (wake) return this.rest === 'asleep' ? this.commit(this.wake(), source) : rejected;
+    if (source === 'placement') return this.commit(this.base(), source);
+    if (source === 'config-reload')
+      return this.current.kind === 'long-press' || this.current.kind === 'drag' ? rejected : this.commit(this.base(), source);
+    if (source === 'desktop-return') {
+      this.restState = 'awake';
+      return this.commit(action('wave', false, 'wave'), source);
+    }
+    if (this.rest === 'asleep') return rejected;
+
+    const kind = this.current.kind;
+    if (reactionSources.has(source) && ['long-press', 'drag', 'success', 'error'].includes(kind)) return rejected;
+    switch (request.source) {
+      case 'presence':
+        if (this.protectedDrag(now) || presenceProtected.has(kind)) return rejected;
+        if (request.state === 'success' || request.state === 'error') {
+          return this.commit(action(this.pick(this.config.animations.workStatus[request.state], request.state), false, request.state), source);
+        }
+        return this.commit(this.base(), source);
+      case 'drag': return motion === 'drag' ? this.commit(this.reaction('drag'), source) : rejected;
+      case 'long-press':
+        return motion === 'drag' && this.holdAt !== undefined && kind !== 'drag' && kind !== 'long-press'
+          ? this.commit(action('clicktsun', true, 'long-press', this.config.triggers.longPressRate), source) : rejected;
+      case 'long-press-release':
+        if (kind !== 'long-press') return rejected;
+        return this.commit(!request.cancelled && this.random() < this.config.triggers.longPressReleaseChance
+          ? action('clicktsun', false, 'clicks') : this.base(), source);
+      case 'drag-release':
+      case 'walk-end': return this.commit(this.base(), source);
+      case 'hover-exit': return kind === 'peek' ? this.commit(this.base(), source) : rejected;
+      case 'click': return this.commit(request.dismissPeek ? (kind === 'peek' ? this.base() : undefined) : this.reaction('clicks'), source);
+      case 'click-combo':
+        this.last.set('clicks', 'clicktsun');
+        return this.commit(action('clicktsun', false, 'clicks'), source);
+      case 'click-startle': return this.commit(action('startled', false, 'startled'), source);
+      case 'hover-peek': return motion === 'idle' && kind === 'idle' ? this.commit(action('peek', false, 'peek'), source) : rejected;
+      case 'double-click': return this.commit(action('wave', false, 'wave'), source);
+      case 'landing': return this.commit(action('sitdown', false, 'sitdown'), source);
+      case 'menu-sleep': return this.commit(this.sleep(), source);
+      case 'auto-sleep':
+        if (motion === 'idle' && !this.protectedDrag(now) && kind !== 'long-press' && kind !== 'drag' &&
+            this.presence === 'idle' && !chatOpen && this.inactiveFor(now) >= this.config.tuning.idleSleepMs &&
+            now - this.wakeEndedAt >= this.config.triggers.wakeProtectionMs)
+          return this.commit(this.sleep(), source);
+        return rejected;
+      case 'random-chain': return this.commit(this.randomChain(context), source);
+      case 'test':
+        if (request.action === 'sleep') return this.commit(this.sleep(), source);
+        if (request.action !== 'wake') return this.commit(request.action, source);
+    }
+    return rejected;
+  }
+
+  private commit(next: Action | undefined, source: Source): Decision {
+    if (!next) return rejected;
+    if (this.unavailable.has(next.clip)) return this.fallback();
+    this.active = next;
+    return { outcome: 'played', action: next, source };
+  }
+  private fallback(): Decision {
+    const clip = ['idle', ...Object.keys(this.config.clips)].find(id => this.config.clips[id] && !this.unavailable.has(id));
+    if (!clip) return rejected;
+    this.restState = 'awake'; this.wakePending = false;
+    if (this.current.clip === clip && this.current.kind === 'idle' && this.current.loop) return rejected;
+    return this.commit(action(clip, true, 'idle'), 'media-fallback');
+  }
+  private base(): Action {
+    if (this.rest === 'asleep') return action(this.pick(this.config.animations.sleep.loop, 'sleep.loop'), true, 'sleep.loop');
+    const s = this.presence;
+    if (s !== 'idle' && s !== 'success' && s !== 'error') return action(this.pick(this.config.animations.workStatus[s], s), true, 'work');
+    const looping = this.config.animations.idle.filter(e => e.loop !== false);
+    return action(this.pick(looping.length ? looping : this.config.animations.idle, 'idle.loop'), true, 'idle');
+  }
+  private reaction(kind: 'clicks' | 'drag' | 'turn' | 'moves'): Action {
+    return action(this.pick(this.config.animations[kind], kind), kind === 'drag' || kind === 'moves', kind);
+  }
+  private inactiveFor(now: number): number { return now - (this.lastInteraction ?? this.startedAt); }
+  private randomChain({ now, motion, chatOpen }: Context): Action | undefined {
+    if (motion !== 'idle' || this.protectedDrag(now)) return;
+    const { triggers, idleSeconds } = this.config;
+    const inactiveFor = this.inactiveFor(now), waiting = this.presence === 'waiting';
+    if (this.presence !== 'idle' && !waiting) return;
+    if (this.lastInteraction !== undefined && inactiveFor < triggers.interactionCooldownMs) return;
     const { kind } = this.current;
-    if (kind !== 'idle' && kind !== 'turn' && !(waiting && kind === 'work')) return null;
+    if (kind !== 'idle' && kind !== 'turn' && kind !== 'work') return;
     const intervalFactor = waiting ? triggers.waitingIntervalFactor :
-      canDoze && inactiveFor >= triggers.drowsyAfterMs ? triggers.drowsyIntervalFactor : 1;
-    if (now - this.lastChainAt < this.chainInterval * intervalFactor) return null;
+      !chatOpen && inactiveFor >= triggers.drowsyAfterMs ? triggers.drowsyIntervalFactor : 1;
+    if (now - this.lastChainAt < this.chainInterval * intervalFactor) return;
 
-    const action = this.drawChain();
+    const selected = this.drawChain();
     this.lastChainAt = now;
     const [min, max] = idleSeconds;
     this.chainInterval = 1000 * (min + this.random() * (max - min));
-    return action;
+    return selected;
   }
-  private drawChain(): Action | null {
+  private drawChain(): Action | undefined {
     const { animationWeights, triggers } = this.config;
     const recentWalk = this.chainRound - this.lastWalkRound < triggers.recentWalkRounds;
     const pool = Object.entries(animationWeights).map(([clip, weight]) => ({
@@ -130,40 +255,27 @@ export class Director {
     if (kind === 'moves') this.lastWalkRound = this.chainRound;
     if (kind === 'idle') {
       const once = this.config.animations.idle.filter(e => e.loop === false);
-      return once.length ? this.play(this.pick(once, 'idle.once'), false, 'idle.once') : null;
+      return once.length ? action(this.pick(once, 'idle.once'), false, 'idle.once') : undefined;
     }
-    return this.react(kind);
+    return this.reaction(kind);
   }
-  sleep(): Action {
-    this.rest = 'entering'; this.queue = [];
-    return this.play(this.pick(this.config.animations.sleep.start, 'sleep.start'), false, 'sleep.start');
+  private sleep(): Action {
+    this.restState = 'entering';
+    return action(this.pick(this.config.animations.sleep.start, 'sleep.start'), false, 'sleep.start');
   }
-  wake(): Action {
-    if (this.rest === 'awake' || this.rest === 'waking') return this.current;
-    // Finish the entry before waking so the sleeping anchor is reached first.
-    if (this.rest === 'entering') { this.wakePending = true; return this.current; }
-    this.rest = 'waking';
-    return this.play(this.pick(this.config.animations.sleep.end, 'sleep.end'), false, 'sleep.end');
+  private wake(): Action {
+    this.restState = 'waking';
+    return action(this.pick(this.config.animations.sleep.end, 'sleep.end'), false, 'sleep.end');
   }
-  private wakePending = false;
-  setPresence(state: Presence, now = Date.now()): Action {
-    if (state === this.presence) return this.current;
-    this.presence = state;
-    if (this.rest !== 'awake' || this.protectedDrag(now) || ['drag', 'sitdown', 'startled', 'peek', 'wave'].includes(this.current.kind)) return this.current;
-    if (state === 'success' || state === 'error') return this.play(this.pick(this.config.animations.workStatus[state], state), false, state);
-    return this.base();
-  }
-  ended(now = Date.now()): Action {
-    if (this.current.loop) return this.current;
+  private finish(now: number): Action | undefined {
+    if (this.current.loop) return;
     if (this.current.kind === 'sleep.start') {
-      this.rest = 'asleep';
+      this.restState = 'asleep';
       if (this.wakePending) { this.wakePending = false; return this.wake(); }
-      return this.base();
     }
-    if (this.current.kind === 'sleep.end') { this.rest = 'awake'; this.wakeEndedAt = now; }
-    if (['sitdown', 'peek', 'startled', 'wave'].includes(this.current.kind)) return this.play('idle', true, 'idle');
-    const queued = this.queue.shift();
-    return queued ? this.current = queued : this.base();
+    if (this.current.kind === 'sleep.end') { this.restState = 'awake'; this.wakeEndedAt = now; }
+    if (idleAfter.has(this.current.kind)) return action('idle', true, 'idle');
+    return this.base();
   }
 }
 

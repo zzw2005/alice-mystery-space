@@ -81,6 +81,17 @@ Electron 以 `AliceButler/electron/config.json` 为准，`defaults.json` 保存�
 
 困意和 waiting 的间隔系数用于当前待抽的随机间隔，从上一轮实际抽取时起算。困意要求聊天窗关闭且处于 idle，waiting 使用自己的系数。休眠须同时满足 `tuning.idleSleepMs` 和唤醒保护条件。
 
+## 第六批交互参数
+
+下表参数同时位于 `AliceButler/electron/config.json` 和 `AliceButler/electron/defaults.json`。判定阈值和状态规则见[交互文档](INTERACTION.md)。
+
+| 参数 | 默认值 | 作用 | 消费文件 |
+|---|---:|---|---|
+| `triggers.longPressMs` | 500 | 保持按压进入长按的等待时间（ms） | main/gestures.ts、main/main.ts |
+| `triggers.longPressRate` | 0.75 | 长按循环的播放速率 | main/engine.ts、renderer/player.ts |
+| `triggers.longPressReleaseChance` | 0.5 | 正常松手后播放常速 `clicktsun` 单次反应的概率 | main/engine.ts |
+| `tuning.replyStaggerMs` | 800 | 队列中相邻回复的最短交付间隔（ms） | main/main.ts、main/bridge.ts |
+
 ## 已有动作权重与间隔
 
 参数由 `main/engine.ts` 的 Director 读取。clip、facing、loop 和 provisional 分别表示素材标识、原始朝向、循环属性、临时标记。
@@ -141,4 +152,4 @@ Electron 以 `AliceButler/electron/config.json` 为准，`defaults.json` 保存�
 
 固定画布 640×360、窗口几何、85% 脚位、协议文件名和 IPC 消息格式属于接口或校准值。弹簧、重力、碰撞恢复、数值积分步长与抛掷饱和系数按改版纪律保留在物理实现。输入校验上限、备份菜单的三项契约、平台托盘长度限制、诊断输出行数和测试超时不作为运行时调参项。
 
-第三批登记了 52 个新增配置键，其中 Electron 37 个、管家 10 个、看护 1 个、部署检查 4 个。第五批新增 11 个 Electron 触发参数。
+第三批登记了 52 个新增配置键，其中 Electron 37 个、管家 10 个、看护 1 个、部署检查 4 个。第五批新增 11 个 Electron 触发参数。第六批新增 4 个 Electron 交互参数。

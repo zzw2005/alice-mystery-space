@@ -3,6 +3,22 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
 export type Message = { id: string; text: string; mine: boolean; ts?: string };
+
+export class ReplyQueue {
+  private replies: Message[] = [];
+  private deliveredAt = -Infinity;
+  enqueue(replies: Message[]): void { for (const reply of replies) this.replies.push(reply); }
+  next(now: number, gap: number): Message | number | undefined {
+    if (!this.replies.length) return;
+    const remaining = this.deliveredAt + gap - now;
+    if (remaining > 0) return remaining;
+    return this.replies.shift();
+  }
+  delivered(now: number): void {
+    this.deliveredAt = this.replies.length ? now : -Infinity;
+  }
+}
+
 export class Bridge {
   private failures = new Map<string, number>();
   constructor(readonly root: string, public tuning = defaultTuning) {}

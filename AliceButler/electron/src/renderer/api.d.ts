@@ -6,7 +6,7 @@ interface DisplayTuning {
 }
 interface AliceAPI {
   ready(kind: 'pet' | 'chat'): void;
-  onPlay(cb: (data: { tuning: DisplayTuning; clip: string; kind: string; loop: boolean; token: number; url: string; facing: string; direction: number }) => void): () => void;
+  onPlay(cb: (data: import('./player').PlayRequest) => void): () => void;
   onReclaimDone(cb: () => void): void;
   onReclaim(cb: () => void): void; reclaimed(): void;
   onProbe(cb: (data: { day: string; clips: Record<string, string>; timeoutMs: number }) => void): void;

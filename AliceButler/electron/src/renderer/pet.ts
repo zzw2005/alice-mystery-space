@@ -48,7 +48,7 @@ actor.addEventListener('pointerdown', event => {
 });
 actor.addEventListener('pointerup', event => { if (event.button === 0) { actor.classList.remove('pressed'); window.alice.pointer('up'); if (actor.hasPointerCapture(event.pointerId)) actor.releasePointerCapture(event.pointerId); } });
 actor.addEventListener('lostpointercapture', () => actor.classList.remove('pressed'));
-actor.addEventListener('pointercancel', () => { actor.classList.remove('pressed'); window.alice.pointer('up'); });
+actor.addEventListener('pointercancel', () => { actor.classList.remove('pressed'); window.alice.pointer('cancel'); });
 actor.addEventListener('dblclick', () => window.alice.pointer('double'));
 actor.addEventListener('contextmenu', event => { event.preventDefault(); if (lastHit) window.alice.pointer('menu'); });
 const bubble = document.querySelector<HTMLElement>('#bubble')!;

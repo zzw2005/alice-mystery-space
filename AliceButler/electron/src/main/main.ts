@@ -8,9 +8,9 @@ import { atomicWrite, limits, loadPosition, Position, restore, snap } from './pl
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
-import { Absence, Gestures } from './gestures';
-import { Bridge, Message } from './bridge';
-import { Action, Director, Physics, Presence, validateConfig } from './engine';
+import { Absence, Gestures, PointerPress } from './gestures';
+import { Bridge, Message, ReplyQueue } from './bridge';
+import { Action, ActionRequest, Director, Physics, Presence, validateConfig } from './engine';
 
 const launchAt = performance.now();
 // Preserve Chromium's current default until the target Windows A/B is accepted.
@@ -26,8 +26,13 @@ let pet: BrowserWindow, chat: BrowserWindow | undefined, tray: Tray, director: D
 let chatLoading: Promise<void> | undefined, startupMs: number | null = null;
 let suspended = false, lowActivityAt = 0, parkPending = false, hiddenByUser = false;
 let chatReady = false, ready = false, quitting = false, videoReady = false;
-let dragOffset = { x: 0, y: 0 }, downCursor = { x: 0, y: 0 }, downAt = 0, lastMovedAt = 0, moved = false;
-let clickTimer: NodeJS.Timeout | undefined, lastLoggedAction: Action | undefined;
+let dragOffset = { x: 0, y: 0 }, press: PointerPress | undefined, lastMovedAt = 0;
+let doubleAllowed = true;
+let clickTimer: NodeJS.Timeout | undefined, pressTimer: NodeJS.Timeout | undefined, replyTimer: NodeJS.Timeout | undefined;
+let lastLoggedAction: Action | undefined;
+const actionRequests: ActionRequest[] = [];
+const replies = new ReplyQueue();
+const automaticRequests = [{ source: 'auto-sleep' }, { source: 'random-chain' }] as const;
 let messages: Message[] = [], presenceNote = '在岗', pending = new Map<string, number>();
 let decodedFrames = 0, lastClipToken = 0, totalFrames = 0;
 let pollRunning = false, statusRunning = false, tickAt = performance.now();
@@ -50,7 +55,6 @@ let standing = false, desktop: Position, lastSaved = '';
 const gestures = new Gestures(), absence = new Absence();
 let approached = false;
 let configNotice = '', configNotified = false;
-const unavailable = new Set<string>();
 function monitor() {
   const point = physics.mode === 'drag' ? screen.getCursorScreenPoint() : { x: Math.round(physics.x + 266), y: Math.round(physics.y + 150) };
   return screen.getDisplayNearestPoint(point);
@@ -64,7 +68,7 @@ function savePosition(): void {
 }
 function place(pos: Position | undefined): void {
   const result = restore(pos, screen.getAllDisplays(), screen.getPrimaryDisplay(), standing, director.config.tuning);
-  director.endHold();
+  clearTimeout(pressTimer); press = undefined; director.endHold();
   physics.mode = 'idle'; physics.vx = physics.vy = 0;
   physics.x = result.x; physics.y = result.y;
 }
@@ -72,7 +76,7 @@ function setStanding(enabled: boolean): void {
   const previous = position();
   if (enabled) desktop = previous;
   standing = enabled; place(enabled ? previous : desktop);
-  director.base(); play('placement'); savePosition(); tray.setContextMenu(menu());
+  actionRequests.push({ source: 'placement' }); savePosition(); tray.setContextMenu(menu());
 }
 function followChat(window: BrowserWindow): void {
   const bounds = pet.getBounds(), a = monitor().workArea;
@@ -88,37 +92,102 @@ function sendChat(): void {
   if (chatReady && chat) chat.webContents.send('chat-state', { messages: messages.slice(-director.config.tuning.chatRows), note: presenceNote, tuning: director.config.tuning,
     pending: [...pending.entries()].map(([id, at]) => ({ id, stage: Date.now() - at < director.config.tuning.pendingThinkMs ? '已收到' : '思考中' })) });
 }
-function play(source: string): void {
-  if (!ready) return;
-  if (unavailable.has(director.current.clip)) {
-    const fallback = ['idle', ...Object.keys(director.config.clips)].find(id => director.config.clips[id] && !unavailable.has(id));
-    if (!fallback) { report('No playable clip remains'); return; }
-    director.rest = 'awake'; stopWalk(); director.play(fallback, true, 'idle');
-    source = 'media-fallback';
+function dispatch(requests: readonly ActionRequest[], now = Date.now()): void {
+  if (!requests.length) return;
+  const chatOpen = chat?.isVisible() ?? false;
+  const decisions = director.request(requests, { now, motion: physics.mode, chatOpen });
+  for (const [index, decision] of decisions.entries()) {
+    if (requests[index].source === 'media-fallback' && decision.outcome === 'rejected') report('No playable clip remains');
+    if (decision.outcome !== 'played') continue;
+    const { action, source } = decision;
+    if (source !== 'resume') stopWalk();
+    if (source === 'random-chain') physics.direction = Math.random() < .5 ? -1 : 1;
+    if (source === 'landing' || source === 'hover-peek' || source === 'desktop-return' || source === 'click-startle') director.interact(now);
+    if (lastLoggedAction !== action) {
+      runStats.recordTrigger(source, action.clip, { kind: action.kind, rest: director.rest,
+        presence: director.presence, motion: physics.mode, chatOpen });
+      lastLoggedAction = action;
+    }
+    // Keep a hidden pet parked; waking a visible sleeping pet resumes immediately.
+    if (suspended && hiddenByUser) return;
+    const clip = director.config.clips[action.clip];
+    suspended = false; parkPending = false;
+    videoReady = false;
+    pet.webContents.send('play', { ...action, tuning: director.config.tuning, token: ++lastClipToken, url: pathToFileURL(path.join(media, clip.file)).href,
+      facing: clip.facing ?? 'right', direction: physics.direction });
   }
-  const action = director.current;
-  const clip = director.config.clips[action.clip];
-  if (!clip) return;
-  if (lastLoggedAction !== action) {
-    runStats.recordTrigger(source, action.clip, { kind: action.kind, rest: director.rest,
-      presence: director.presence, motion: physics.mode, chatOpen: chat?.isVisible() ?? false });
-    lastLoggedAction = action;
-  }
-  // Keep a hidden pet parked; waking a visible sleeping pet resumes immediately.
-  if (suspended && hiddenByUser) return;
-  suspended = false; parkPending = false;
-  videoReady = false;
-  pet.webContents.send('play', { ...action, tuning: director.config.tuning, token: ++lastClipToken, url: pathToFileURL(path.join(media, clip.file)).href,
-    facing: clip.facing ?? 'right', direction: physics.direction });
 }
 function stopWalk(): void { if (physics.mode === 'walk') physics.mode = 'idle'; }
-function gesture(clip: 'wave' | 'sitdown' | 'startled' | 'peek', source: string): void {
-  stopWalk(); director.interact(Date.now()); director.gesture(clip); play(source);
-}
-function wakeFromInteraction(source: string, now = Date.now()): void {
+function interact(request: ActionRequest, now = Date.now()): void {
   director.interact(now);
-  const previous = director.current;
-  if (director.wake() !== previous) play(source);
+  actionRequests.push(request);
+}
+function deliverReplies(): void {
+  clearTimeout(replyTimer); replyTimer = undefined;
+  const next = replies.next(performance.now(), bridge.tuning.replyStaggerMs);
+  if (typeof next === 'number') { replyTimer = setTimeout(deliverReplies, next); return; }
+  if (!next) return;
+
+  messages.push(next);
+  pet.webContents.send('bubble', next.text);
+  replies.delivered(performance.now());
+  const now = Date.now(), sentAt = pending.get(next.id);
+  if (sentAt !== undefined) { runStats.today().chatRoundTripMs.push(now - sentAt); persistStats(); }
+  pending.delete(next.id);
+  interact({ source: 'chat-reply' }, now);
+  sendChat();
+  deliverReplies();
+}
+function clearClick(): void { clearTimeout(clickTimer); clickTimer = undefined; }
+function samplePress(cursor: Electron.Point, now: number): boolean {
+  const gesture = press?.sample(cursor, now, director.config.tuning, director.config.triggers);
+  if (!gesture) return false;
+  clearTimeout(pressTimer);
+  gestures.resetClicks();
+  actionRequests.push({ source: gesture });
+  return true;
+}
+function finishPress(cursor: Electron.Point, now: number, cancelled: boolean): void {
+  const held = press;
+  press = undefined;
+  clearTimeout(pressTimer);
+  director.endHold();
+  if (!held) return;
+  const release = held.release(cursor, now, director.config.tuning);
+  doubleAllowed = release === 'click' && !cancelled;
+  if (release === 'wake') { gestures.resetClicks(); return; }
+  director.interact(now);
+  if (release !== 'click' || cancelled) gestures.resetClicks();
+  if (release === 'drag') {
+    if (cancelled) physics.release(true, director.config.tuning);
+    else {
+      const edge = snap(physics.x, physics.y, area(), director.config.tuning);
+      if (edge || standing) {
+        physics.mode = 'idle'; physics.vx = physics.vy = 0;
+        if (edge) { physics.x = edge.x; physics.y = edge.y; }
+        if (standing) physics.y = area().floor;
+      } else physics.release(now - lastMovedAt > director.config.tuning.releaseStaleMs, director.config.tuning);
+    }
+    actionRequests.push({ source: 'drag-release' });
+    return;
+  }
+
+  physics.mode = 'idle'; physics.vx = physics.vy = 0;
+  if (release === 'long-press') {
+    actionRequests.push({ source: 'long-press-release', cancelled });
+  } else if (release === 'click' && !cancelled) {
+    // Count confirmed singles at release time, after the double-click window.
+    clickTimer = setTimeout(() => {
+      clickTimer = undefined;
+      const combo = gestures.singleClick(now, director.config.triggers);
+      if (combo) actionRequests.push({ source: 'click-combo' });
+      else if (approached && gestures.allowStartle(now, director.config.interaction)) actionRequests.push({ source: 'click-startle' });
+      else actionRequests.push({ source: 'click' });
+      if (director.rest === 'awake') toggleChat().catch(report);
+    }, director.config.tuning.doubleClickMs);
+  } else if (director.current.kind === 'moves') {
+    actionRequests.push({ source: 'walk-end' });
+  }
 }
 async function ensureChat(): Promise<BrowserWindow> {
   if (!chat) {
@@ -134,7 +203,7 @@ async function toggleChat(): Promise<void> {
   const window = await ensureChat();
   followChat(window);
   window.show(); window.focus(); sendChat();
-  wakeFromInteraction('chat-open');
+  interact({ source: 'chat-open' });
 }
 async function purposefulExit(): Promise<void> {
   atomicWrite(path.join(root, 'pet-disabled.flag'), new Date().toISOString());
@@ -164,16 +233,14 @@ function menu(): Menu {
   return Menu.buildFromTemplate([
     { label: '和艾莉丝说话', click: () => { toggleChat().catch(report); } },
     { label: director?.rest === 'awake' ? '睡一会儿' : '起来', click: () => {
-      stopWalk();
-      if (director.rest === 'awake') { director.interact(Date.now()); director.sleep(); play('menu-sleep'); }
-      else wakeFromInteraction('menu-wake');
+      interact({ source: director.rest === 'awake' ? 'menu-sleep' : 'menu-wake' });
     } },
     { label: '任务栏站立', type: 'checkbox', checked: standing, click: item => setStanding(item.checked) },
-    { label: '跳一下', click: () => { stopWalk(); physics.mode = 'air'; physics.vy = -330; physics.vx = 0; } },
-    { label: '回到原位', click: () => { physics.mode = 'idle'; physics.x = area().right - director.config.tuning.homeInsetPx; physics.y = area().floor; } },
+    { label: '跳一下', click: () => { finishPress(screen.getCursorScreenPoint(), Date.now(), true); physics.mode = 'air'; physics.vy = -330; physics.vx = 0; } },
+    { label: '回到原位', click: () => { finishPress(screen.getCursorScreenPoint(), Date.now(), true); physics.mode = 'idle'; physics.x = area().right - director.config.tuning.homeInsetPx; physics.y = area().floor; } },
     { label: pet?.isVisible() ? '隐藏桌宠' : '显示桌宠', click: () => pet.isVisible() ? pet.hide() : pet.showInactive() },
     { label: '回滚上一版', enabled: backups.length > 0, submenu: backups.map(id => ({ label: id, click: () => rollback(id) })) },
-    { label: '重载动作配置', click: () => loadConfig().then(() => play('config-reload')).catch(report) },
+    { label: '重载动作配置', click: () => loadConfig().catch(report) },
     { type: 'separator' }, { label: '退出桌宠', click: () => purposefulExit().catch(report) }
   ]);
 }
@@ -203,9 +270,8 @@ async function loadConfig(): Promise<void> {
     configNotice = missing ? '配置缺失，已使用内置默认值。' : '读取配置失败，已启用内置默认值。';
     report(error); notifyConfig();
   }
-  unavailable.clear();
-  if (director) { director.config = config; director.base(); gestures.resetClicks(); }
-  else { director = new Director(config); director.base(); }
+  if (director) { director.replaceConfig(config); gestures.resetClicks(); actionRequests.push({ source: 'config-reload' }); }
+  else director = new Director(config);
   bridge.tuning = config.tuning;
   if (timers.length) startTimers();
   configStamp = (await fs.stat(configPath).catch(e => { if (e.code === 'ENOENT') return undefined; throw e; }))?.mtimeMs;
@@ -245,8 +311,8 @@ async function setup(): Promise<void> {
   pet = new BrowserWindow({ ...windowOptions(), width: 533, height: 300, transparent: true, hasShadow: false, title: '艾莉丝桌宠' });
   secureWindow(pet);
   pet.on('hide', () => { hiddenByUser = true; });
-  pet.on('show', () => { hiddenByUser = false; lowActivityAt = 0; if (suspended || parkPending) play('resume'); });
-  const back = (reason: string) => { if (absence.back(reason, Date.now(), director.config.interaction.awayMs)) gesture('wave', 'desktop-return'); };
+  pet.on('show', () => { hiddenByUser = false; lowActivityAt = 0; if (suspended || parkPending) dispatch([{ source: 'resume' }]); });
+  const back = (reason: string) => { if (absence.back(reason, Date.now(), director.config.interaction.awayMs)) actionRequests.push({ source: 'desktop-return' }); };
   powerMonitor.on('lock-screen', () => absence.leave('lock', Date.now()));
   powerMonitor.on('unlock-screen', () => back('lock'));
   pet.on('minimize', () => absence.leave('minimize', Date.now()));
@@ -259,20 +325,20 @@ async function setup(): Promise<void> {
   pet.setIgnoreMouseEvents(true, { forward: true });
   ipcMain.on('renderer-ready', event => {
     if (!trusted(event, pet)) return;
-    ready = true; play('startup');
+    ready = true; dispatch([{ source: 'startup' }]);
   });
   ipcMain.on('chat-ready', event => { if (trusted(event, chat)) { chatReady = true; sendChat(); } });
   ipcMain.on('chat-close', event => { if (trusted(event, chat)) chat?.hide(); });
   ipcMain.handle('chat-send', async (event, text: unknown) => {
     if (!trusted(event, chat)) throw Error('Invalid sender');
-    const msg = await bridge.send(text); messages.push(msg); pending.set(msg.id, Date.now()); sendChat(); wakeFromInteraction('chat-send');
+    const msg = await bridge.send(text); messages.push(msg); pending.set(msg.id, Date.now()); sendChat(); interact({ source: 'chat-send' });
     return msg.id;
   });
   ipcMain.on('hit', (event, hit: unknown) => {
     if (trusted(event, pet) && typeof hit === 'boolean' && physics.mode !== 'drag' && ignoringMouse === hit) {
       if (!hit) {
         gestures.leave();
-        if (director.current.kind === 'peek') { director.base(); play('hover-exit'); }
+        if (director.current.kind === 'peek') actionRequests.push({ source: 'hover-exit' });
       }
       ignoringMouse = !hit; pet.setIgnoreMouseEvents(ignoringMouse, { forward: true });
     }
@@ -318,61 +384,45 @@ async function setup(): Promise<void> {
   ipcMain.on('video-error', (event, message: unknown, token?: number) => {
     if (!trusted(event, pet)) return;
     report(`video: ${String(message).slice(0, 500)}`);
-    if (token === lastClipToken) { unavailable.add(director.current.clip); play('media-fallback'); }
+    if (token === lastClipToken) dispatch([{ source: 'media-fallback' }]);
   });
   ipcMain.on('ended', (event, token: unknown) => {
     if (!trusted(event, pet) || token !== lastClipToken) return;
+    // Requests received while a sleep transition is finishing still belong to it.
+    if (director.rest === 'entering' || director.rest === 'waking') dispatch(actionRequests.splice(0));
     if (director.current.kind === 'turn') physics.direction *= -1;
-    director.ended(); play('animation-end');
+    dispatch([{ source: 'animation-end' }]);
   });
   ipcMain.on('pet-pointer', (event, type: unknown) => {
     if (!trusted(event, pet)) return;
     const now = Date.now(); const cursor = screen.getCursorScreenPoint();
     if (type === 'down') {
-      if (clickTimer) { clearTimeout(clickTimer); clickTimer = undefined; }
+      clearClick();
+      const wakeOnly = director.rest !== 'awake';
+      press = new PointerPress(cursor, now, wakeOnly);
+      interact({ source: 'pointer-wake' }, now);
+      if (wakeOnly) return;
       approached = gestures.press(now, director.config.interaction);
-      if (director.current.kind === 'peek') { director.base(); play('click'); }
-      downAt = now; downCursor = cursor; lastMovedAt = now; moved = false;
+      if (director.current.kind === 'peek') actionRequests.push({ source: 'click', dismissPeek: true });
+      lastMovedAt = now;
       dragOffset = { x: cursor.x - physics.x, y: cursor.y - physics.y };
+      physics.targetX = physics.x; physics.targetY = physics.y;
       physics.vx = physics.vy = 0; physics.mode = 'drag';
-      director.beginHold(now); wakeFromInteraction('pointer-wake', now);
-    } else if (type === 'up') {
-      director.endHold();
-      if (physics.mode !== 'drag') return;
-      director.interact(now);
-      if (!moved && now - downAt < director.config.tuning.clickHoldMs) {
-        physics.mode = 'idle';
-        // Count confirmed singles at release time, after the double-click window.
-        clickTimer = setTimeout(() => {
-          clickTimer = undefined;
-          const combo = gestures.singleClick(now, director.config.triggers);
-          if (!combo && approached && gestures.allowStartle(now, director.config.interaction)) gesture('startled', 'click-startle');
-          else if (director.rest === 'awake') { director.click(combo); play(combo ? 'click-combo' : 'click'); }
-          else wakeFromInteraction('pointer-wake');
-          toggleChat().catch(report);
-        }, director.config.tuning.doubleClickMs);
-      } else {
-        gestures.resetClicks();
-        const edge = snap(physics.x, physics.y, area(), director.config.tuning);
-        if (edge || standing) {
-          physics.mode = 'idle'; physics.vx = physics.vy = 0;
-          if (edge) { physics.x = edge.x; physics.y = edge.y; }
-          if (standing) physics.y = area().floor;
-        } else physics.release(now - lastMovedAt > director.config.tuning.releaseStaleMs, director.config.tuning);
-        director.base(); play('drag-release');
-      }
+      director.beginHold(now);
+      pressTimer = setTimeout(() => {
+        const at = Date.now();
+        if (samplePress(screen.getCursorScreenPoint(), at)) dispatch(actionRequests.splice(0), at);
+      }, director.config.triggers.longPressMs);
+    } else if (type === 'up' || type === 'cancel') {
+      finishPress(cursor, now, type === 'cancel');
     } else if (type === 'double') {
-      if (clickTimer) clearTimeout(clickTimer); clickTimer = undefined;
-      director.endHold(); gestures.resetClicks();
-      physics.mode = 'idle'; physics.vx = physics.vy = 0; gesture('wave', 'double-click');
+      clearClick(); gestures.resetClicks();
+      if (!doubleAllowed || press) return;
+      physics.mode = 'idle'; physics.vx = physics.vy = 0;
+      interact({ source: 'double-click' }, now);
     } else if (type === 'menu') menu().popup({ window: pet });
   });
-  pet.on('blur', () => {
-    director.endHold();
-    if (physics.mode !== 'drag') return;
-    director.interact(Date.now()); gestures.resetClicks();
-    physics.release(true, director.config.tuning); director.base(); play('drag-release');
-  });
+  pet.on('blur', () => finishPress(screen.getCursorScreenPoint(), Date.now(), true));
   writeStats();
   await pet.loadFile(path.join(ui, 'pet.html'));
   messages = await bridge.history();
@@ -392,15 +442,19 @@ async function setup(): Promise<void> {
     Object.assign(globalThis, { aliceTest: {
       tuning: () => director.config.tuning,
       menu: () => menu(),
-      state: () => ({ standing, configNotified, action: director.current, token: lastClipToken, rest: director.rest, mode: physics.mode, decodedFrames: totalFrames, videoReady, ignoringMouse, suspended, startupMs, x: physics.x, y: physics.y }),
-      play: (clip: string) => { if (!director.config.clips[clip]) throw Error('Unknown clip'); stopWalk(); director.play(clip, ['idle', 'walk', 'doze', 'dangle'].includes(clip), 'test'); play('test'); return lastClipToken; },
-      playMove: () => { director.play('walk', true, 'moves'); play('test'); return lastClipToken; },
+      state: () => ({ standing, configNotified, action: director.current, token: lastClipToken, rest: director.rest, presence: director.presence, mode: physics.mode, decodedFrames: totalFrames, videoReady, ignoringMouse, suspended, startupMs, x: physics.x, y: physics.y }),
+      play: (clip: string) => {
+        if (!director.config.clips[clip]) throw Error('Unknown clip');
+        dispatch([{ source: 'test', action: { clip, loop: ['idle', 'walk', 'doze', 'dangle'].includes(clip), kind: 'test', rate: 1 } }]);
+        return lastClipToken;
+      },
+      playMove: () => { dispatch([{ source: 'test', action: { clip: 'walk', loop: true, kind: 'moves', rate: 1 } }]); return lastClipToken; },
       pose: (direction: number) => { physics.mode = 'idle'; physics.direction = direction; pet.webContents.send('pose', { x: 0, y: 0, squash: 1, direction, heightAbove: 0 }); },
-      sleep: () => { stopWalk(); director.sleep(); play('test'); },
-      wake: () => { director.wake(); play('test'); },
+      sleep: () => dispatch([{ source: 'test', action: 'sleep' }]),
+      wake: () => dispatch([{ source: 'test', action: 'wake' }]),
       openChat: ensureChat,
       park: parkPlayback,
-      resume: () => play('resume'),
+      resume: () => dispatch([{ source: 'resume' }]),
       hide: () => { pet.showInactive(); pet.hide(); },
       show: () => pet.showInactive(),
       ageLowActivity: (ms: number) => { lowActivityAt = Date.now() - ms; },
@@ -416,36 +470,33 @@ function startTimers(): void {
     const now = performance.now(), dt = (now - tickAt) / 1000; tickAt = now;
     const wallNow = Date.now();
     const cursor = screen.getCursorScreenPoint();
-    if (physics.mode === 'drag') {
-      physics.targetX = cursor.x - dragOffset.x; physics.targetY = cursor.y - dragOffset.y;
-      if (Math.abs(cursor.x - downCursor.x) + Math.abs(cursor.y - downCursor.y) > tuning.dragDistancePx && !moved) {
-        moved = true; director.react('drag'); play('drag');
+    if (press && physics.mode === 'drag') {
+      samplePress(cursor, wallNow);
+      if (press.state === 'drag') {
+        physics.targetX = cursor.x - dragOffset.x; physics.targetY = cursor.y - dragOffset.y;
+        if (Math.abs(physics.targetX - physics.x) + Math.abs(physics.targetY - physics.y) > tuning.dragDistancePx) lastMovedAt = wallNow;
       }
-      if (Math.abs(physics.targetX - physics.x) + Math.abs(physics.targetY - physics.y) > tuning.dragDistancePx) lastMovedAt = wallNow;
     }
     const oldMode = physics.mode, bounds = area();
     const cfg = director.config.interaction;
     if (physics.mode !== 'walk' || videoReady) {
       const hardLanding = physics.step(dt, bounds, now, cfg, tuning);
-      if (hardLanding && !standing) gesture('sitdown', 'landing');
+      if (hardLanding && !standing) actionRequests.push({ source: 'landing' });
     }
     if (standing && physics.mode !== 'drag') { physics.y = bounds.floor; if (physics.mode === 'air') physics.mode = 'idle'; }
     if (physics.mode !== 'drag' && gestures.sample(cursor, { x: physics.x + 266, y: physics.y + 150 }, !ignoringMouse,
         pet.isVisible() && physics.mode === 'idle' && director.rest === 'awake' && director.current.kind === 'idle',
-        wallNow, cfg)) gesture('peek', 'hover-peek');
-    if (oldMode === 'walk' && physics.mode === 'idle') { director.base(); play('walk-end'); }
+        wallNow, cfg)) actionRequests.push({ source: 'hover-peek' });
+    if (oldMode === 'walk' && physics.mode === 'idle') actionRequests.push({ source: 'walk-end' });
+    if (physics.mode === 'idle' && director.rest === 'awake') actionRequests.push(...automaticRequests);
+    if (ready && actionRequests.length) dispatch(actionRequests.splice(0), wallNow);
     const x = Math.round(physics.x), y = Math.round(physics.y);
     if (windowX !== x || windowY !== y) { pet.setPosition(x, y); windowX = x; windowY = y; if (chat?.isVisible()) followChat(chat); }
     const pose = { x: cursor.x - x, y: cursor.y - y, squash: physics.squash, direction: director.current.kind === 'peek' ? gestures.direction : physics.direction,
-      tilt: physics.mode === 'drag' && moved ? Math.max(-1, Math.min(1, physics.vx / cfg.dragTiltSpeed)) * cfg.dragTiltDegrees : 0, dragging: physics.mode === 'drag', heightAbove: Math.max(0, bounds.floor - y) };
+      tilt: physics.mode === 'drag' && press?.state === 'drag' ? Math.max(-1, Math.min(1, physics.vx / cfg.dragTiltSpeed)) * cfg.dragTiltDegrees : 0, dragging: physics.mode === 'drag', heightAbove: Math.max(0, bounds.floor - y) };
     const key = JSON.stringify(pose);
     if (ready && (!suspended || (pet.isVisible() && key !== lastPose))) pet.webContents.send('pose', pose);
     lastPose = key;
-    if (physics.mode === 'idle') {
-      const next = director.automaticAction(wallNow, chat?.isVisible() ?? false);
-      if (next?.kind === 'sleep.start') play('auto-sleep');
-      else if (next) { physics.direction = Math.random() < .5 ? -1 : 1; play('random-chain'); }
-    }
   }, tuning.tickMs));
   timers.push(setInterval(() => {
     if (physics.mode === 'idle') savePosition();
@@ -454,10 +505,9 @@ function startTimers(): void {
     else if (!lowActivityAt) lowActivityAt = Date.now();
     else if (Date.now() - lowActivityAt >= tuning.decoderReleaseMs) parkPlayback();
   }, tuning.maintenanceMs));
-  timers.push(setInterval(() => { if (!pollRunning) { pollRunning = true; bridge.poll().then(replies => {
-    for (const reply of replies) { messages.push(reply); pet.webContents.send('bubble', reply.text); const sentAt = pending.get(reply.id);
-      if (sentAt !== undefined) { runStats.today().chatRoundTripMs.push(Date.now() - sentAt); persistStats(); }
-      pending.delete(reply.id); wakeFromInteraction('chat-reply'); }
+  timers.push(setInterval(() => { if (!pollRunning) { pollRunning = true; bridge.poll().then(batch => {
+    replies.enqueue(batch);
+    deliverReplies();
     for (const [id, at] of pending) if (Date.now() - at > tuning.replyTimeoutMs) pending.delete(id);
     sendChat();
   }).catch(report).finally(() => { pollRunning = false; }); } }, tuning.replyPollMs));
@@ -478,22 +528,21 @@ async function heartbeat(): Promise<void> {
   if (ready && videoReady) atomicWrite(path.join(root, 'pet-heartbeat.txt'), new Date().toISOString());
 }
 async function statusTick(): Promise<void> {
-  let state: Presence = 'idle'; presenceNote = '在岗';
+  let state: Presence = 'idle', valid = false; presenceNote = '在岗';
   try {
     const p = JSON.parse((await fs.readFile(path.join(root, 'presence.json'), 'utf8')).replace(/^\uFEFF/, ''));
-    const age = Date.now() - Date.parse(p.ts);
+    const age = Date.now() - Date.parse(p?.ts);
     if (age >= -director.config.tuning.futureToleranceMs && age < director.config.tuning.presenceValidMs && ['idle', 'thinking', 'working', 'result', 'waiting', 'success', 'error'].includes(p.state)) {
-      state = p.state;
+      state = p.state; valid = true;
       const names: Record<Presence, string> = { idle: '在岗', thinking: '思考中', working: '忙碌中', result: '整理中', waiting: '等待中', success: '已完成', error: '出问题了' };
       presenceNote = typeof p.note === 'string' && p.note.trim() ? p.note.slice(0, 200) : names[state];
     }
   } catch (e) { if ((e as NodeJS.ErrnoException).code !== 'ENOENT' && !(e instanceof SyntaxError)) report(e); }
-  const previous = director.current; director.setPresence(state);
-  if (previous !== director.current) { stopWalk(); play('presence'); }
+  actionRequests.push({ source: 'presence', state, valid });
   await healthTick();
   tray.setToolTip(((healthWarning ? '⚠ 每日自检异常 · ' : '') + '艾莉丝 · ' + presenceNote).slice(0, 120)); sendChat();
   const stat = await fs.stat(configPath).catch(e => { if (e.code === 'ENOENT') return undefined; throw e; });
-  if (stat?.mtimeMs !== configStamp) { try { await loadConfig(); play('config-reload'); } catch (e) { report(e); } }
+  if (stat?.mtimeMs !== configStamp) await loadConfig();
 }
 async function optionalJson(name: string) {
   try { return JSON.parse(await fs.readFile(path.join(root, name), 'utf8')); }
@@ -553,6 +602,10 @@ function writeStats(sessionOpen = true): void {
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
   app.on('second-instance', () => { if (pet) { if (pet.isMinimized()) pet.restore(); pet.show(); pet.focus(); } });
-  app.on('before-quit', () => { quitting = true; if (pet && desktop) { savePosition(); writeStats(false); } timers.forEach(clearInterval); });
+  app.on('before-quit', () => {
+    quitting = true; clearClick(); clearTimeout(pressTimer); clearTimeout(replyTimer);
+    if (pet && desktop) { savePosition(); writeStats(false); }
+    timers.forEach(clearInterval);
+  });
   app.whenReady().then(setup).catch(e => { report(e); app.exit(1); });
 }

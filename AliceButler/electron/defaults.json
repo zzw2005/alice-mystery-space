@@ -188,12 +188,16 @@
     "clickComboGapMs": 600,
     "clickComboCount": 3,
     "dragProtectionMs": 2000,
-    "waitingIntervalFactor": 2
+    "waitingIntervalFactor": 2,
+    "longPressMs": 500,
+    "longPressRate": 0.75,
+    "longPressReleaseChance": 0.5
   },
   "tuning": {
     "tickMs": 16,
     "maintenanceMs": 1000,
     "replyPollMs": 1000,
+    "replyStaggerMs": 800,
     "statusPollMs": 2000,
     "heartbeatMs": 30000,
     "statsMs": 60000,
@@ -244,12 +248,16 @@
       "clickComboGapMs": "相邻单击的间隔上界（不含）",
       "clickComboCount": "触发彩蛋所需的连续单击数",
       "dragProtectionMs": "按住后阻止随机链和在岗动作打断的等待时间",
-      "waitingIntervalFactor": "等待档的随机链间隔系数"
+      "waitingIntervalFactor": "等待档的随机链间隔系数",
+      "longPressMs": "未越过拖动阈值时触发长按的时间",
+      "longPressRate": "长按循环播放速率",
+      "longPressReleaseChance": "长按松手后播放一次常速反应的概率"
     },
     "tuning": {
       "tickMs": "物理与命中采样间隔",
       "maintenanceMs": "位置保存与低活跃检查间隔",
       "replyPollMs": "回复目录轮询间隔",
+      "replyStaggerMs": "队列中相邻两条回复的最短交付间隔",
       "statusPollMs": "在岗状态与配置重载检查间隔",
       "heartbeatMs": "桌宠心跳间隔",
       "statsMs": "性能记录间隔",
