@@ -82,6 +82,74 @@
 
 旧动画目录及黑底源视频目录已经删除，不再从本仓恢复。文末遗留的 WinForms/黑底说明只记录历史，不是当前动作来源。
 
+## 维护流程：加入新动作
+
+加入大量新动作后的维护流程如下：
+
+### 1. 素材层（必做）
+
+| 步骤 | 操作 |
+|------|------|
+| 源视频 | 新生成的 mp4 放到 `video/`（不进 Git） |
+| 跑素材链 | `watermark → chroma → normalize → encode` |
+| 最终产物 | 把 `step04/*.webm` 复制到对应目录：<br>• 主宠物：`Alice-pet/assets/webm/` 或 `$ALICE_HOME/Alice-pet/main-animation/webm/`<br>• 自定义种类：`pet/<种类名>-animation/webm/` |
+| macOS | 额外生成 HEVC `.mov` 放到对应 `mov/` 目录 |
+
+### 2. 配置层（必做）
+
+编辑 `config.jsonc`（或你的 `pet/<种类>-config.json`）里的 `animations` 字段，把新动作名加进去：
+
+```jsonc
+"animations": {
+  "idle": ["待机呼吸休闲", "你的新待机"],
+  "clicks": ["点击回应-开心跃动", "你的新点击动作"],
+  "moves": {
+    "actions": [
+      { "name": "螃蟹走路" },
+      { "name": "你的新移动动作" }
+    ]
+  },
+  "categories": {
+    // AI 对话时可选的动作分类
+    "happy": ["你的开心动作"],
+    "work": ["你的工作动作"]
+  },
+  "events": {
+    "balance": ["余额-钱袋满溢", "你的新余额动作"]
+  },
+  "sleep": {
+    "start": ["入睡动作"],
+    "loop": ["循环动作"],
+    "end": ["醒来动作"]
+  }
+}
+```
+
+动作名必须和 `.webm` 文件名一致（不含扩展名）。
+
+### 3. 权重与分类（建议做）
+
+- `animationWeights`：调整 idle / turn / move 的出现概率
+- `categories`：给 AI 对话时选动作用，按情绪/场景分类
+- 睡觉动作单独维护 `start / loop / end` 三段，注意帧衔接
+
+### 4. 维护建议
+
+| 场景 | 做法 |
+|------|------|
+| 少量新增 | 直接改 `config.jsonc` + 丢 webm 进去 |
+| 大量新增 | 建议自己做一个动作清单（JSON/表格），记录：动作名、分类、权重、是否需要特殊处理（移动/睡觉/事件） |
+| 自定义宠物种类 | 用 pet pack，动画和配置完全隔离，不影响主宠物 |
+| 版本管理 | 源视频不进 Git；webm 和 config.jsonc 进 Git 或单独打包 |
+
+### 推荐工作流
+
+1. 新动作生成 → 命名规范统一
+2. 跑素材链 → 得到 webm
+3. 更新 `config.jsonc` 的对应池子
+4. 测试播放与衔接
+5. 按需调整权重 / 分类
+
 ## 部署
 
 - 目标机：主人 Windows 电脑，运行目录 `C:\ProgramData\AliceButler\`，计划任务 AliceButler（管家）＋ AlicePetLaunch（桌宠）＋ AliceButlerWatchdog（看门狗）。
