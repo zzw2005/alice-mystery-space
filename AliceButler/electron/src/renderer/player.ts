@@ -1,9 +1,10 @@
 export type PlayRequest = { tuning: DisplayTuning; clip: string; kind: string; loop: boolean; token: number; url: string; facing: string; direction: number };
 
 // Two bounded slots: the displayed clip and one incoming clip. A frozen canvas
-// covers the 180 ms transition, so the outgoing decoder can be released at once.
+// covers native loop seeks and suspension. A transition commits only on a decoded frame.
 export class Player {
   private active = -1;
+  private outgoing?: HTMLVideoElement;
   private request?: PlayRequest;
   private pending?: AbortController;
   private frameId = 0;
@@ -51,14 +52,22 @@ export class Player {
       frame.close(); this.copying = false;
     });
   }
+  private finishFade(): void {
+    clearTimeout(this.fadeTimer);
+    if (this.outgoing) {
+      this.release(this.outgoing); this.outgoing = undefined;
+      if (this.video) { this.video.style.transition = 'none'; this.video.style.opacity = '1'; }
+    }
+    this.fading = false;
+  }
   private freeze(): void {
-    clearTimeout(this.fadeTimer); this.fading = false;
-    this.snapshot(this.video);
+    this.finishFade();
+    if (!this.buffering) this.snapshot(this.video);
     if (this.hasPoster) { this.poster.style.zIndex = '1'; this.poster.style.opacity = '1'; }
   }
   private hold(video: HTMLVideoElement): void {
     if (video !== this.video || this.suspended || !this.hasPoster) return;
-    clearTimeout(this.fadeTimer); this.fading = false; this.buffering = true;
+    this.finishFade(); this.buffering = true;
     // Keep the video composited so Chromium continues frame callbacks. Hiding it
     // here can stall presentation callbacks during the seek we are waiting for.
     this.poster.style.zIndex = '3'; this.poster.style.opacity = '1';
@@ -92,7 +101,21 @@ export class Player {
     this.actor.dataset.suspended = 'true';
     window.alice.suspended();
   }
-  async play(data: PlayRequest): Promise<void> {
+  coverReclaim(): void {
+    if (!this.video || this.suspended) return;
+    if (!this.buffering) this.snapshot(this.video);
+    if (this.hasPoster) this.actor.dataset.reclaim = 'true';
+  }
+  finishReclaim(): void {
+    delete this.actor.dataset.reclaim;
+  }
+  async reclaim(): Promise<void> {
+    // Swap at the current timeline position. An ordinary action takes priority.
+    if (!this.request || !this.video || this.pending || this.suspended || this.video.ended) return;
+    if ((this.video.duration - this.video.currentTime) * 1000 < this.request.tuning.fadeMs) return;
+    await this.play(this.request, true);
+  }
+  async play(data: PlayRequest, reclaim = false): Promise<void> {
     if (this.reportMs !== data.tuning.frameReportMs) {
       this.reportMs = data.tuning.frameReportMs;
       clearInterval(this.reportTimer);
@@ -101,12 +124,13 @@ export class Player {
       }, this.reportMs);
     }
     this.pending?.abort(); this.pending = undefined;
-    if (!this.suspended && this.video?.src === data.url && this.request?.loop && data.loop) {
-      this.request = data; this.present(data); return;
+    if (!reclaim && !this.suspended && this.video?.src === data.url && this.request?.loop && data.loop) {
+      this.request = data; this.present(data, false); return;
     }
     const controller = new AbortController(); this.pending = controller;
     const { signal } = controller;
     const incoming = this.videos[this.active === 0 ? 1 : 0];
+    this.finishFade();
     this.release(incoming);
     // Aborting an obsolete load must never detach the displayed slot.
     signal.addEventListener('abort', () => { if (incoming !== this.video) this.release(incoming); }, { once: true });
@@ -118,7 +142,13 @@ export class Player {
         incoming.addEventListener('error', () => reject(Error(incoming.error?.message || 'media decode failed')), { once: true, signal });
         incoming.addEventListener('loadeddata', () => {
           // loadeddata and play() alone do not guarantee a presented frame.
-          firstFrameId = incoming.requestVideoFrameCallback(() => resolve());
+          if (reclaim) incoming.currentTime = this.video!.currentTime;
+          const waitPresented = () => {
+            firstFrameId = incoming.requestVideoFrameCallback(() => {
+              if (incoming.seeking) waitPresented(); else resolve();
+            });
+          };
+          waitPresented();
           incoming.play().catch(reject);
         }, { once: true, signal });
         incoming.loop = data.loop; incoming.src = data.url; incoming.load();
@@ -126,25 +156,33 @@ export class Player {
       await firstFrame;
       if (signal.aborted) return;
       const previous = this.video;
+      const previousReady = previous && previous.readyState >= 2 && !this.buffering;
       this.freeze(); previous?.cancelVideoFrameCallback(this.frameId);
       this.active = this.videos.indexOf(incoming); this.request = data; this.suspended = false;
       this.buffering = false;
-      if (previous) this.release(previous);
-      incoming.style.transition = this.reducedMotion.matches || (!previous && this.actor.dataset.suspended !== 'true') ? 'none' : `opacity ${data.tuning.fadeMs}ms ease-out`;
+      const fade = !reclaim && !this.reducedMotion.matches && previousReady && data.tuning.fadeMs;
+      if (previous && fade) {
+        this.outgoing = previous;
+        previous.onended = previous.onwaiting = previous.onseeking = previous.onerror = null;
+        previous.pause();
+        previous.style.transition = `opacity ${fade}ms linear`; previous.style.opacity = '0';
+      } else if (previous) this.release(previous);
+      this.poster.style.opacity = '0';
+      incoming.style.transition = fade ? `opacity ${fade}ms linear` : 'none';
       incoming.style.opacity = '1';
       incoming.onended = () => { this.frame(); if (this.request) window.alice.ended(this.request.token); };
       incoming.onwaiting = incoming.onseeking = () => this.hold(incoming);
       incoming.onerror = () => { this.hold(incoming); window.alice.videoError(`${data.clip}: ${incoming.error?.message || 'media decode failed'}`, this.request?.token); };
       this.actor.dataset.suspended = 'false';
-      this.fading = this.hasPoster;
-      if (!this.hasPoster) this.snapshot(incoming);
-      this.frames++; this.frame(); this.follow(incoming); this.present(data);
+      this.fading = !!fade;
+      if (!this.hasPoster || this.actor.dataset.reclaim) this.snapshot(incoming);
+      this.frames++; this.frame(); this.follow(incoming); if (!reclaim) this.present(data, true);
       this.fadeTimer = window.setTimeout(() => {
-        this.fading = false; this.snapshot(incoming);
+        this.finishFade(); if (!this.buffering) this.snapshot(incoming);
         if (!this.buffering) this.poster.style.opacity = '0';
-      }, data.tuning.fadeMs + 10);
+      }, fade ? fade + 10 : 0);
     } catch (error) {
-      if (!signal.aborted) { this.release(incoming); window.alice.videoError(`${data.clip}: ${String(error)}`, data.token); }
+      if (!signal.aborted) { this.release(incoming); window.alice.videoError(`${data.clip}: ${String(error)}`, reclaim ? undefined : data.token); }
     } finally {
       clearTimeout(timeout); incoming.cancelVideoFrameCallback(firstFrameId);
       if (this.pending === controller) {
@@ -154,9 +192,9 @@ export class Player {
       }
     }
   }
-  private present(data: PlayRequest): void {
+  private present(data: PlayRequest, started: boolean): void {
     this.actor.dataset.clip = data.clip; this.actor.dataset.kind = data.kind;
     this.actor.dataset.token = String(data.token); this.shown(data);
-    window.alice.videoReady(data.token);
+    window.alice.videoReady(data.token, started);
   }
 }

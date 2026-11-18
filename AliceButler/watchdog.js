@@ -49,6 +49,22 @@ if (runnerState !== "ok") {
 }
 if (petState === "stale" || petState === "missing") {
   actions.push("pet:run");
-  schtasks(["/run", "/tn", "AlicePetLaunch"], (err) => { if (err) logLine("run AlicePetLaunch failed: " + err.message); });
+  // Tie a scheduler restart to the interrupted Electron session. Only a first
+  // frame in the next process will count it as a successful recovery.
+  const receipt = path.join(__dirname, "pet-restart-request.json");
+  let previous;
+  try { previous = JSON.parse(fs.readFileSync(path.join(__dirname, "pet-stats.json"), "utf8")); }
+  catch (error) { if (error.code !== "ENOENT") logLine("read pet session: " + error.message); }
+  if (previous?.sessionOpen && previous.sessionId) {
+    const temp = receipt + "." + process.pid + ".tmp";
+    try {
+      fs.writeFileSync(temp, JSON.stringify({ previousSession: previous.sessionId, ts: Date.now(),
+        expiresAt: Date.now() + config.watchThresholds.petHeartbeatStaleSec * 1000 }));
+      fs.renameSync(temp, receipt);
+    } catch (error) { logLine("write pet recovery receipt: " + error.message); }
+  }
+  schtasks(["/run", "/tn", "AlicePetLaunch"], (err) => {
+    if (err) { logLine("run AlicePetLaunch failed: " + err.message); fs.rmSync(receipt, { force: true }); }
+  });
 }
 logLine("check runner=" + runnerState + " pet=" + petState + " action=" + (actions.length ? actions.join(",") : "none"));

@@ -1,3 +1,4 @@
+import { probeClips } from "./decode-probe.js";
 import { bodyMask } from './hit-mask.js';
 import { Player } from './player.js';
 const videos = Array.from(document.querySelectorAll('video'));
@@ -59,3 +60,8 @@ function nextBubble(): void {
 }
 window.alice.onBubble(text => { queue.push(text); if (bubble.hidden) nextBubble(); });
 window.alice.ready('pet');
+window.alice.onReclaim(async () => { player.coverReclaim(); await player.reclaim(); window.alice.reclaimed(); });
+window.alice.onProbe(async ({ day, clips, timeoutMs }) => {
+  window.alice.probed(day, await probeClips(clips, timeoutMs));
+});
+window.alice.onReclaimDone(() => player.finishReclaim());

@@ -40,7 +40,8 @@ const assert = require('node:assert/strict');
     for (const clip of Object.keys(require('../config.json').clips)) {
       const token = await app.evaluate((_electron, clip) => global.aliceTest.play(clip), clip);
       await pet.waitForFunction(token => document.querySelector('#actor').dataset.token === String(token) && [...document.querySelectorAll('video')].some(v => v.style.opacity === '1' && v.currentTime > .12), token);
-      await new Promise(r => setTimeout(r, 100));
+      await pet.waitForFunction(() => [...document.querySelectorAll('video')].filter(v => v.hasAttribute('src')).length === 1,
+        null, { timeout: require('../config.json').tuning.fadeMs + 2000 });
       assert.equal(await pet.evaluate(() => [...document.querySelectorAll('video')].filter(v => v.hasAttribute('src')).length), 1, 'outgoing source is detached');
       const a = await app.evaluate(() => global.aliceTest.state()); assert.equal(a.action.clip, clip); assert.ok(a.videoReady);
     }

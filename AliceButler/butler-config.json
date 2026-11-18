@@ -93,5 +93,9 @@
     "runnerRespawn": "退避秒数、窗口内重启次数预算与窗口分钟数",
     "watchThresholds": "心跳判活（秒）与在岗刷新、有效期（分钟）",
     "limits": "大小上限 MB、保留时长和坏文件隔离次数，字段后缀标明单位。"
+  },
+  "dailyCheck": {
+    "probeWaitMs": 240000,
+    "diskMinMiB": 512
   }
 }

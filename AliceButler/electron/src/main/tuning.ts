@@ -1,4 +1,7 @@
 export interface Tuning {
+  memoryHighMiB: number;
+  memoryPollMs: number;
+  reclaimCooldownMs: number;
   loopCoverMs: number;
   hitAlpha: number;
   tickMs: number;

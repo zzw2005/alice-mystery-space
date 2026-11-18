@@ -214,7 +214,10 @@
     "bubbleMs": 2100,
     "chatScrollPx": 48,
     "hitAlpha": 12,
-    "loopCoverMs": 90
+    "loopCoverMs": 90,
+    "memoryHighMiB": 220,
+    "memoryPollMs": 15000,
+    "reclaimCooldownMs": 60000
   },
   "_notes": {
     "tuning": {
@@ -254,7 +257,10 @@
       "bubbleMs": "每条气泡的停留时间（最短2000毫秒）",
       "chatScrollPx": "聊天自动滚到底部的距离阈值",
       "hitAlpha": "人物命中蒙版的 alpha 阈值（0–254）",
-      "loopCoverMs": "循环末尾提前显示已解码画布的时间，跨过浏览器重新定位首帧的间隙"
+      "loopCoverMs": "循环末尾提前显示已解码画布的时间，跨过浏览器重新定位首帧的间隙",
+      "memoryHighMiB": "进程树私有内存回收水位（MiB）",
+      "memoryPollMs": "进程树水位采样间隔",
+      "reclaimCooldownMs": "连续两次水位回收的最短间隔"
     },
     "interaction": {
       "hoverMs": "悬停触发时长",

@@ -1,8 +1,12 @@
+import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { app, BrowserWindow, ipcMain, Menu, nativeImage, powerMonitor, screen, Tray } from 'electron';
 import fs from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
+import { RunStats } from './run-stats';
 import { atomicWrite, limits, loadPosition, Position, restore, snap } from './placement';
 import path from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
 import { Absence, Gestures } from './gestures';
 import { Bridge, Message } from './bridge';
@@ -28,6 +32,12 @@ let messages: Message[] = [], presenceNote = '在岗', pending = new Map<string,
 let decodedFrames = 0, lastClipToken = 0, totalFrames = 0;
 let pollRunning = false, statusRunning = false, tickAt = performance.now();
 let configStamp: number | undefined, metricsStamp = Date.now();
+const sessionId = randomUUID();
+const statsPath = path.join(root, 'pet-stats.json');
+let runStats: RunStats, lastReclaimAt = -Infinity, guardBefore: number | undefined;
+let lastReclaim: { beforeMiB: number; afterMiB: number | null; at: string } | undefined;
+let probeDay = '', healthWarning = false;
+let sampledStats: Record<string, unknown>;
 let ignoringMouse = true;
 let windowX = 0, windowY = 0, lastPose = '';
 const timers: NodeJS.Timeout[] = [];
@@ -203,18 +213,20 @@ function parkPlayback(): void {
   if (!ready || suspended || parkPending) return;
   parkPending = true; pet.webContents.send('suspend-playback');
 }
-async function trimPlaybackMemory(): Promise<void> {
+async function trimPlaybackMemory(highWater = false): Promise<void> {
   // Ask Chromium to reclaim caches after sources have been detached. Never force
   // GC on a frame/drag path, and never detach a debugger owned by another client.
   const debug = pet.webContents.debugger;
   if (debug.isAttached()) return;
   try {
     debug.attach('1.3');
-    await debug.sendCommand('Memory.simulatePressureNotification', { level: 'critical' });
+    if (highWater) await debug.sendCommand('HeapProfiler.collectGarbage');
+    await debug.sendCommand('Memory.simulatePressureNotification', { level: highWater ? 'moderate' : 'critical' });
   } finally { if (debug.isAttached()) debug.detach(); }
 }
 async function setup(): Promise<void> {
   await fs.mkdir(root, { recursive: true });
+  runStats = new RunStats(statsPath);
   await loadConfig();
   nextRandom = Date.now() + director.config.tuning.firstRandomMs;
   pet = new BrowserWindow({ ...windowOptions(), width: 533, height: 300, transparent: true, hasShadow: false, title: '艾莉丝桌宠' });
@@ -255,15 +267,36 @@ async function setup(): Promise<void> {
   ipcMain.on('frame', (event, value: unknown) => {
     if (trusted(event, pet) && typeof value === 'number' && value > 0 && value <= Math.ceil(240 * director.config.tuning.frameReportMs / 1000)) { decodedFrames += value; totalFrames += value; }
   });
-  ipcMain.on('video-ready', async (event, token: unknown) => {
+  ipcMain.on('video-ready', async (event, token: unknown, started: unknown) => {
     if (!trusted(event, pet) || token !== lastClipToken) return;
     videoReady = true;
+    const day = runStats.today();
+    if (started === true) day.plays[director.current.clip] = (day.plays[director.current.clip] ?? 0) + 1;
+    if (runStats.recoveryPending) { day.recoveries++; runStats.recoveryPending = false; }
+    persistStats();
+    if (startupMs === null) await heartbeat();
     if (startupMs === null) { startupMs = performance.now() - launchAt; if (!testMode) pet.showInactive(); }
     if (director.current.kind === 'moves' && physics.mode === 'idle') {
       const bounds = area(); physics.targetX = Math.max(bounds.left, Math.min(bounds.right, physics.x + physics.direction * (director.config.tuning.walkMinPx + Math.random() * director.config.tuning.walkExtraPx)));
       physics.mode = 'walk';
     }
     try { await fs.rm(path.join(root, 'pet-disabled.flag'), { force: true }); atomicWrite(path.join(root, 'pet-start.log'), `electron video ok ${new Date().toISOString()}\n`); } catch (e) { report(e); }
+  });
+  ipcMain.on('probed', (event, day, clips) => {
+    if (!trusted(event, pet) || day !== probeDay) return;
+    if (!clips || Object.keys(director.config.clips).some(id => typeof clips[id] !== 'string')) return;
+    atomicWrite(path.join(root, 'pet-decode-check.json'), JSON.stringify({ day, clips }));
+  });
+  ipcMain.on('reclaimed', async event => {
+    if (!trusted(event, pet) || guardBefore === undefined) return;
+    try {
+      await trimPlaybackMemory(true);
+      await delay(director.config.tuning.maintenanceMs);
+      const after = memorySample(app.getAppMetrics());
+      lastReclaim = { beforeMiB: guardBefore, afterMiB: after.privateMiB, at: new Date().toISOString() };
+      await writeStats();
+    } catch (error) { report(error); }
+    finally { guardBefore = undefined; if (!pet.isDestroyed()) pet.webContents.send('reclaim-done'); }
   });
   ipcMain.on('playback-suspended', event => {
     if (!trusted(event, pet) || !parkPending) return;
@@ -315,6 +348,7 @@ async function setup(): Promise<void> {
     } else if (type === 'menu') menu().popup({ window: pet });
   });
   pet.on('blur', () => { if (physics.mode === 'drag') { physics.release(true, director.config.tuning); director.base(); play(); } });
+  writeStats();
   await pet.loadFile(path.join(ui, 'pet.html'));
   messages = await bridge.history();
   tray = new Tray(nativeImage.createFromPath(path.join(ui, 'avatar.ico')));
@@ -345,6 +379,7 @@ async function setup(): Promise<void> {
       hide: () => { pet.showInactive(); pet.hide(); },
       show: () => pet.showInactive(),
       ageLowActivity: (ms: number) => { lowActivityAt = Date.now() - ms; },
+      healthWarning: () => healthWarning,
       stats: writeStats
     } });
   }
@@ -392,13 +427,24 @@ function startTimers(): void {
     else if (Date.now() - lowActivityAt >= tuning.decoderReleaseMs) parkPlayback();
   }, tuning.maintenanceMs));
   timers.push(setInterval(() => { if (!pollRunning) { pollRunning = true; bridge.poll().then(replies => {
-    for (const reply of replies) { messages.push(reply); pet.webContents.send('bubble', reply.text); pending.delete(reply.id); lastInteract = Date.now(); director.wake(); play(); }
+    for (const reply of replies) { messages.push(reply); pet.webContents.send('bubble', reply.text); const sentAt = pending.get(reply.id);
+      if (sentAt !== undefined) { runStats.today().chatRoundTripMs.push(Date.now() - sentAt); persistStats(); }
+      pending.delete(reply.id); lastInteract = Date.now(); director.wake(); play(); }
     for (const [id, at] of pending) if (Date.now() - at > tuning.replyTimeoutMs) pending.delete(id);
     sendChat();
   }).catch(report).finally(() => { pollRunning = false; }); } }, tuning.replyPollMs));
   timers.push(setInterval(() => { if (!statusRunning) { statusRunning = true; statusTick().catch(report).finally(() => { statusRunning = false; }); } }, tuning.statusPollMs));
+  timers.push(setInterval(() => {
+    const sample = memorySample(app.getAppMetrics());
+    runStats.recordMemory(sample.workingSetMiB, sample.privateMiB);
+    if (sample.privateMiB !== null && sample.privateMiB >= tuning.memoryHighMiB && ready && videoReady &&
+        !suspended && guardBefore === undefined && Date.now() - lastReclaimAt >= tuning.reclaimCooldownMs) {
+      guardBefore = sample.privateMiB; lastReclaimAt = Date.now();
+      pet.webContents.send('reclaim');
+    }
+  }, tuning.memoryPollMs));
   timers.push(setInterval(() => heartbeat().catch(report), tuning.heartbeatMs));
-  timers.push(setInterval(() => writeStats().catch(report), tuning.statsMs));
+  timers.push(setInterval(() => writeStats(), tuning.statsMs));
 }
 async function heartbeat(): Promise<void> {
   if (ready && videoReady) atomicWrite(path.join(root, 'pet-heartbeat.txt'), new Date().toISOString());
@@ -416,24 +462,69 @@ async function statusTick(): Promise<void> {
   } catch (e) { if ((e as NodeJS.ErrnoException).code !== 'ENOENT' && !(e instanceof SyntaxError)) report(e); }
   const previous = director.current; director.setPresence(state);
   if (previous !== director.current) { stopWalk(); play(); }
-  tray.setToolTip(('艾莉丝 · ' + presenceNote).slice(0, 120)); sendChat();
+  await healthTick();
+  tray.setToolTip(((healthWarning ? '⚠ 每日自检异常 · ' : '') + '艾莉丝 · ' + presenceNote).slice(0, 120)); sendChat();
   const stat = await fs.stat(configPath).catch(e => { if (e.code === 'ENOENT') return undefined; throw e; });
   if (stat?.mtimeMs !== configStamp) { try { await loadConfig(); play(); } catch (e) { report(e); } }
 }
-async function writeStats(): Promise<void> {
+async function optionalJson(name: string) {
+  try { return JSON.parse(await fs.readFile(path.join(root, name), 'utf8')); }
+  catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+}
+async function healthTick(): Promise<void> {
+  const request = await optionalJson('pet-check-request.json');
+  const today = new Date().toISOString().slice(0, 10);
+  if (request?.day === today && probeDay !== today && ready) {
+    probeDay = today;
+    const clips = Object.fromEntries(Object.entries(director.config.clips).map(([id, clip]) =>
+      [id, pathToFileURL(path.join(media, clip.file)).href]));
+    pet.webContents.send('probe', { day: today, clips, timeoutMs: director.config.tuning.firstFrameMs });
+  }
+  const result = await optionalJson('pet-daily-check.json');
+  const warn = result?.ok === false;
+  if (warn !== healthWarning) {
+    healthWarning = warn;
+    tray.setImage(nativeImage.createFromPath(path.join(ui, warn ? 'avatar-warning.png' : 'avatar.png')).resize({ width: 32, height: 32 }));
+  }
+}
+function memorySample(metrics: Electron.ProcessMetric[]) {
+  const workingSetMiB = metrics.reduce((n, p) => n + p.memory.workingSetSize, 0) / 1024;
+  let privateMiB: number | null = null;
+  if (metrics.every(p => typeof p.memory.privateBytes === 'number')) {
+    privateMiB = metrics.reduce((n, p) => n + p.memory.privateBytes!, 0) / 1024;
+  } else if (process.platform === 'linux') {
+    privateMiB = 0;
+    for (const p of metrics) {
+      try {
+        const rollup = readFileSync(`/proc/${p.pid}/smaps_rollup`, 'utf8');
+        for (const match of rollup.matchAll(/^Private_(?:Clean|Dirty):\s+(\d+)/gm)) privateMiB += Number(match[1]) / 1024;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      }
+    }
+  }
+  return { workingSetMiB, privateMiB };
+}
+function persistStats(sessionOpen = true): void {
+  atomicWrite(statsPath, JSON.stringify({ ...sampledStats, days: runStats.days, sessionOpen, sessionId }));
+}
+function writeStats(sessionOpen = true): void {
   const metrics = app.getAppMetrics();
-  const data = { ts: new Date().toISOString(), runtime: 'electron', diskLoads: 0, decodedFrames,
+  const memory = memorySample(metrics);
+  runStats.recordMemory(memory.workingSetMiB, memory.privateMiB);
+  sampledStats = { pid: process.pid, lastReclaim,
+    privateSampleMiB: memory.privateMiB, ts: new Date().toISOString(), runtime: 'electron', diskLoads: 0, decodedFrames,
     intervalMs: Date.now() - metricsStamp, clip: director.current.clip, restState: director.rest,
     processCount: metrics.length, workingSetMB: metrics.reduce((n, p) => n + p.memory.workingSetSize, 0) / 1024,
     privateMB: metrics.every(p => typeof p.memory.privateBytes === 'number') ? metrics.reduce((n, p) => n + p.memory.privateBytes!, 0) / 1024 : null,
     cpuPercent: metrics.reduce((n, p) => n + p.cpu.percentCPUUsage, 0), startupMs, suspended,
     acceleration: process.env.ALICE_PET_ACCELERATION === 'off' ? 'off' : 'on',
     processes: metrics.map(p => ({ type: p.type, pid: p.pid, workingSetMB: p.memory.workingSetSize / 1024 })) };
-  atomicWrite(path.join(root, 'pet-stats.json'), JSON.stringify(data)); decodedFrames = 0; metricsStamp = Date.now();
+  persistStats(sessionOpen); decodedFrames = 0; metricsStamp = Date.now();
 }
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
   app.on('second-instance', () => { if (pet) { if (pet.isMinimized()) pet.restore(); pet.show(); pet.focus(); } });
-  app.on('before-quit', () => { quitting = true; if (pet && desktop) savePosition(); timers.forEach(clearInterval); });
+  app.on('before-quit', () => { quitting = true; if (pet && desktop) { savePosition(); writeStats(false); } timers.forEach(clearInterval); });
   app.whenReady().then(setup).catch(e => { report(e); app.exit(1); });
 }
