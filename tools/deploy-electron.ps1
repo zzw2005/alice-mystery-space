@@ -9,6 +9,8 @@ $ErrorActionPreference = 'Stop'
 $package = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../AliceButler/electron/release/AlicePetNew-win32-x64'))
 $checks = (Get-Content -LiteralPath (Join-Path $PSScriptRoot '../AliceButler/butler-config.json') -Raw | ConvertFrom-Json).deployChecks
 $target = 'C:\ProgramData\AliceButler'
+$pwsh = 'C:\Program Files\PowerShell\7\pwsh.exe'
+if (!(Test-Path -LiteralPath $pwsh)) { throw "System PowerShell 7 not found: $pwsh" }
 if (!$ReportPath) { $ReportPath = Join-Path $target 'electron-deploy-result.json' }
 if ($Asset -and !$PSBoundParameters.ContainsKey('ReportPath')) {
     $ReportPath = Join-Path $target 'electron-asset-deploy-result.json'
@@ -92,7 +94,7 @@ if ($Asset) {
         $task = 'AliceDeploySmoke-' + $smokeId
         try {
             $writer = Join-Path $PSScriptRoot 'write-deploy-smoke.ps1'
-            $action = New-ScheduledTaskAction -Execute (Get-Command pwsh.exe).Source -Argument ('-NoProfile -File "' + $writer + '" -Id ' + $smokeId)
+            $action = New-ScheduledTaskAction -Execute $pwsh -Argument ('-NoProfile -File "' + $writer + '" -Id ' + $smokeId)
             $principal = New-ScheduledTaskPrincipal -UserId SYSTEM -LogonType ServiceAccount -RunLevel Highest
             Register-ScheduledTask -TaskName $task -Action $action -Principal $principal | Out-Null
             Start-ScheduledTask -TaskName $task
@@ -186,7 +188,7 @@ try {
     $task = 'AliceDeploySmoke-' + $smokeId
     try {
         $writer = Join-Path $PSScriptRoot 'write-deploy-smoke.ps1'
-        $action = New-ScheduledTaskAction -Execute (Get-Command pwsh.exe).Source -Argument ('-NoProfile -File "' + $writer + '" -Id ' + $smokeId)
+        $action = New-ScheduledTaskAction -Execute $pwsh -Argument ('-NoProfile -File "' + $writer + '" -Id ' + $smokeId)
         $principal = New-ScheduledTaskPrincipal -UserId SYSTEM -LogonType ServiceAccount -RunLevel Highest
         Register-ScheduledTask -TaskName $task -Action $action -Principal $principal | Out-Null
         Start-ScheduledTask -TaskName $task
