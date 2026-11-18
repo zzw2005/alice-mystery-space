@@ -76,6 +76,7 @@ if ($Asset) {
         if ((Get-FileHash -LiteralPath $assetStage).Hash -ne $assetHash) { throw "Staged hash mismatch: $Asset" }
         Copy-Item -LiteralPath $assetStage -Destination $assetTarget -Force
         if ((Get-FileHash -LiteralPath $assetTarget).Hash -ne $assetHash) { throw "Target hash mismatch: $Asset" }
+        Remove-Item -LiteralPath (Join-Path $target 'pet-disabled.flag') -Force -ErrorAction SilentlyContinue
         Write-Output "[2/4] Launch AlicePetLaunch and require fresh video/heartbeat"
         & schtasks.exe /run /tn AlicePetLaunch
         if ($LASTEXITCODE -ne 0) { throw 'AlicePetLaunch failed' }
@@ -170,6 +171,7 @@ try {
         if ((Get-FileHash -LiteralPath $dest).Hash -ne $item.hash) { throw "Target hash mismatch: $($item.relative)" }
     }
     $manifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $backup 'new-package-manifest.json') -Encoding utf8NoBOM
+    Remove-Item -LiteralPath (Join-Path $target 'pet-disabled.flag') -Force -ErrorAction SilentlyContinue
     Write-Output '[3/5] Launch existing AlicePetLaunch and require fresh video/heartbeat'
     & schtasks.exe /run /tn AlicePetLaunch
     if ($LASTEXITCODE -ne 0) { throw 'AlicePetLaunch failed' }
