@@ -1,9 +1,10 @@
 import { spawn } from 'node:child_process';
-import { app, BrowserWindow, ipcMain, Menu, nativeImage, screen, Tray } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, nativeImage, powerMonitor, screen, Tray } from 'electron';
 import fs from 'node:fs/promises';
 import { atomicWrite, limits, loadPosition, Position, restore, snap } from './placement';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { Absence, Gestures } from './gestures';
 import { Bridge, Message } from './bridge';
 import { Director, Physics, Presence, validateConfig } from './engine';
 
@@ -36,7 +37,9 @@ function report(error: unknown): void {
   fs.appendFile(path.join(root, 'pet-error.log'), `${new Date().toISOString()} ${String(error)}\n`).catch(() => {});
 }
 const statePath = path.join(root, 'pet-position.json');
-let standing = false, desktop: Position, lastSaved = '', dragDirection = 0;
+let standing = false, desktop: Position, lastSaved = '';
+const gestures = new Gestures(), absence = new Absence();
+let approached = false, pressedPeek = false;
 let configNotice = '', configNotified = false;
 const unavailable = new Set<string>();
 function monitor() {
@@ -93,6 +96,9 @@ function play(): void {
     facing: clip.facing ?? 'right', direction: physics.direction });
 }
 function stopWalk(): void { if (physics.mode === 'walk') physics.mode = 'idle'; }
+function gesture(clip: 'wave' | 'sitdown' | 'startled' | 'peek'): void {
+  stopWalk(); director.gesture(clip); play(); lastInteract = Date.now();
+}
 function reaction(kind: 'clicks' | 'drag' | 'turn' | 'moves'): void {
   if (kind !== 'moves') stopWalk();
   director.react(kind); play();
@@ -150,12 +156,24 @@ function menu(): Menu {
 }
 async function loadConfig(): Promise<void> {
   let config;
-  try { config = validateConfig(JSON.parse(await fs.readFile(configPath, 'utf8'))); }
+  const defaults = await fs.readFile(path.join(app.getAppPath(), 'defaults.json'), 'utf8');
+  try {
+    const input = JSON.parse(await fs.readFile(configPath, 'utf8'));
+    if (input && input.interaction === undefined && input.clips && input.animations) {
+      const builtIn = JSON.parse(defaults);
+      input.interaction = builtIn.interaction;
+      input.clips = { ...builtIn.clips, ...input.clips };
+      if (input.animations.drag?.length === 1 && input.animations.drag[0].provisional)
+        input.animations.drag = builtIn.animations.drag;
+    }
+    config = validateConfig(input);
+    for (const id of ['dangle', 'sitdown', 'peek', 'startled', 'idle', 'wave'])
+      if (!config.clips[id]) throw Error('Missing interaction clip: ' + id);
+  }
   catch (error) {
     const missing = (error as NodeJS.ErrnoException).code === 'ENOENT';
     const backup = path.join(root, 'config.json.bad-' + Date.now());
     if (!missing) await fs.copyFile(configPath, backup).catch(e => { if (!['EACCES', 'EPERM'].includes(e.code)) throw e; report(e); });
-    const defaults = await fs.readFile(path.join(app.getAppPath(), 'defaults.json'), 'utf8');
     config = validateConfig(JSON.parse(defaults));
     try { atomicWrite(configPath, defaults); }
     catch (e) { if (!['EACCES', 'EPERM', 'EROFS'].includes((e as NodeJS.ErrnoException).code ?? '')) throw e; }
@@ -201,6 +219,11 @@ async function setup(): Promise<void> {
   secureWindow(pet);
   pet.on('hide', () => { hiddenByUser = true; });
   pet.on('show', () => { hiddenByUser = false; lowActivityAt = 0; if (suspended || parkPending) play(); });
+  const back = (reason: string) => { if (absence.back(reason, Date.now(), director.config.interaction.awayMs)) gesture('wave'); };
+  powerMonitor.on('lock-screen', () => absence.leave('lock', Date.now()));
+  powerMonitor.on('unlock-screen', () => back('lock'));
+  pet.on('minimize', () => absence.leave('minimize', Date.now()));
+  pet.on('restore', () => back('minimize'));
   const saved = loadPosition(statePath);
   standing = saved?.standing ?? false;
   place(saved?.position); desktop = saved?.desktop ?? position();
@@ -220,6 +243,10 @@ async function setup(): Promise<void> {
   });
   ipcMain.on('hit', (event, hit: unknown) => {
     if (trusted(event, pet) && typeof hit === 'boolean' && physics.mode !== 'drag' && ignoringMouse === hit) {
+      if (!hit) {
+        gestures.leave();
+        if (director.current.kind === 'peek') { director.base(); play(); }
+      }
       ignoringMouse = !hit; pet.setIgnoreMouseEvents(ignoringMouse, { forward: true });
     }
   });
@@ -255,7 +282,10 @@ async function setup(): Promise<void> {
     const now = Date.now(); const cursor = screen.getCursorScreenPoint();
     if (type === 'down') {
       if (clickTimer) { clearTimeout(clickTimer); clickTimer = undefined; }
-      dragDirection = 0; downAt = now; downCursor = cursor; lastMovedAt = now; moved = false;
+      approached = gestures.press(now, director.config.interaction);
+      pressedPeek = director.current.kind === 'peek';
+      if (pressedPeek) { director.base(); play(); }
+      downAt = now; downCursor = cursor; lastMovedAt = now; moved = false;
       dragOffset = { x: cursor.x - physics.x, y: cursor.y - physics.y };
       physics.vx = physics.vy = 0; physics.mode = 'drag';
       if (director.rest !== 'awake') { director.wake(); play(); }
@@ -263,7 +293,11 @@ async function setup(): Promise<void> {
       lastInteract = now;
       if (!moved && now - downAt < 400) {
         physics.mode = 'idle';
-        clickTimer = setTimeout(() => { reaction('clicks'); toggleChat().catch(report); clickTimer = undefined; }, 260);
+        const startled = approached && gestures.allowStartle(now, director.config.interaction);
+        const immediate = startled || pressedPeek;
+        if (startled) gesture('startled');
+        else if (pressedPeek) reaction('clicks');
+        clickTimer = setTimeout(() => { if (!immediate) reaction('clicks'); toggleChat().catch(report); clickTimer = undefined; }, 260);
       } else {
         const edge = snap(physics.x, physics.y, area());
         if (edge || standing) {
@@ -273,11 +307,9 @@ async function setup(): Promise<void> {
         } else physics.release(now - lastMovedAt > 150);
         director.base(); play();
       }
-      dragDirection = 0;
     } else if (type === 'double') {
       if (clickTimer) clearTimeout(clickTimer); clickTimer = undefined;
-      director.wake(); director.base(); play();
-      physics.mode = 'air'; physics.vx = 0; physics.vy = -330;
+      physics.mode = 'idle'; physics.vx = physics.vy = 0; gesture('wave');
     } else if (type === 'menu') menu().popup({ window: pet });
   });
   pet.on('blur', () => { if (physics.mode === 'drag') { physics.release(true); director.base(); play(); } });
@@ -303,18 +335,20 @@ async function setup(): Promise<void> {
       if (Math.abs(physics.targetX - physics.x) + Math.abs(physics.targetY - physics.y) > 4) lastMovedAt = Date.now();
     }
     const oldMode = physics.mode, bounds = area();
-    if (physics.mode !== 'walk' || videoReady) physics.step(dt, bounds, now);
-    if (standing && physics.mode !== 'drag') { physics.y = bounds.floor; if (physics.mode === 'air') physics.mode = 'idle'; }
-    if (physics.mode === 'drag' && moved && Math.abs(physics.vx) > 110) {
-      dragDirection = Math.sign(physics.vx);
-      if (director.current.kind !== 'drag.walk' && !unavailable.has('walk') && director.config.clips.walk) {
-        director.play('walk', true, 'drag.walk'); play();
-      }
+    const cfg = director.config.interaction;
+    if (physics.mode !== 'walk' || videoReady) {
+      const hardLanding = physics.step(dt, bounds, now, cfg);
+      if (hardLanding && !standing) gesture('sitdown');
     }
+    if (standing && physics.mode !== 'drag') { physics.y = bounds.floor; if (physics.mode === 'air') physics.mode = 'idle'; }
+    if (physics.mode !== 'drag' && gestures.sample(cursor, { x: physics.x + 266, y: physics.y + 150 }, !ignoringMouse,
+        pet.isVisible() && physics.mode === 'idle' && director.rest === 'awake' && director.current.kind === 'idle',
+        Date.now(), cfg)) gesture('peek');
     if (oldMode === 'walk' && physics.mode === 'idle') { director.base(); play(); }
     const x = Math.round(physics.x), y = Math.round(physics.y);
     if (windowX !== x || windowY !== y) { pet.setPosition(x, y); windowX = x; windowY = y; if (chat?.isVisible()) followChat(chat); }
-    const pose = { x: cursor.x - x, y: cursor.y - y, squash: physics.squash, direction: physics.mode === 'drag' && dragDirection ? dragDirection : physics.direction, dragging: physics.mode === 'drag', heightAbove: Math.max(0, bounds.floor - y) };
+    const pose = { x: cursor.x - x, y: cursor.y - y, squash: physics.squash, direction: director.current.kind === 'peek' ? gestures.direction : physics.direction,
+      tilt: physics.mode === 'drag' && moved ? Math.max(-1, Math.min(1, physics.vx / cfg.dragTiltSpeed)) * cfg.dragTiltDegrees : 0, dragging: physics.mode === 'drag', heightAbove: Math.max(0, bounds.floor - y) };
     const key = JSON.stringify(pose);
     if (ready && (!suspended || (pet.isVisible() && key !== lastPose))) pet.webContents.send('pose', pose);
     lastPose = key;
@@ -343,7 +377,7 @@ async function setup(): Promise<void> {
     Object.assign(globalThis, { aliceTest: {
       menu: () => menu(),
       state: () => ({ standing, configNotified, action: director.current, token: lastClipToken, rest: director.rest, mode: physics.mode, decodedFrames: totalFrames, videoReady, ignoringMouse, suspended, startupMs, x: physics.x, y: physics.y }),
-      play: (clip: string) => { if (!director.config.clips[clip]) throw Error('Unknown clip'); stopWalk(); director.play(clip, ['idle', 'walk', 'doze'].includes(clip), 'test'); play(); return lastClipToken; },
+      play: (clip: string) => { if (!director.config.clips[clip]) throw Error('Unknown clip'); stopWalk(); director.play(clip, ['idle', 'walk', 'doze', 'dangle'].includes(clip), 'test'); play(); return lastClipToken; },
       playMove: () => { director.play('walk', true, 'moves'); play(); return lastClipToken; },
       pose: (direction: number) => { physics.mode = 'idle'; physics.direction = direction; pet.webContents.send('pose', { x: 0, y: 0, squash: 1, direction, heightAbove: 0 }); },
       sleep: () => { stopWalk(); director.sleep(); play(); },

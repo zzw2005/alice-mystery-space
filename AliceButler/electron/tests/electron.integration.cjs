@@ -101,7 +101,7 @@ const assert = require('node:assert/strict');
     const stats = JSON.parse(await fs.readFile(path.join(root, 'pet-stats.json'), 'utf8'));
     assert.equal(stats.diskLoads, 0); assert.ok(stats.decodedFrames > 0);
     assert.deepEqual(errors, []);
-    const result = { root, alpha, stats, checks: ['nine clips', 'alpha video', 'idle loop wrap', 'walk mirroring', 'sandbox', 'sleep relay', 'six presence modes', 'atomic chat', 'text safety'], errors };
+    const result = { root, alpha, stats, checks: ['all configured clips', 'alpha video', 'idle loop wrap', 'walk mirroring', 'sandbox', 'sleep relay', 'six presence modes', 'atomic chat', 'text safety'], errors };
     await fs.writeFile(path.join(root, 'result.json'), JSON.stringify(result, null, 2)); console.log(JSON.stringify(result, null, 2));
   } finally { await app.close(); }
 })().catch(e => { console.error(e); process.exitCode = 1; });

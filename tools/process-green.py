@@ -1,6 +1,6 @@
 """Approved green source -> HSV key -> fixed calibration -> VP9-alpha WebM.
 
-The nine files in clips-green/v2 are the complete formal action set. The
+The files listed in CLIPS are the formal action set. The
 pipeline never reads legacy animation frames and never generates video.
 """
 from __future__ import annotations
@@ -29,6 +29,9 @@ CLIPS = {
     "doze": ("sleep", True),
     "wakeup": ("sleep", False),
 }
+EXTENSIONS = {"dangle": ("standing", True), "peek": ("standing", True),
+              "sitdown": ("standing", False), "startled": ("standing", False)}
+CLIPS.update(EXTENSIONS)
 SLEEP_SEAM_FRAMES = 24
 SLEEP_SEAM_CRF = 24
 TARGETS = {
@@ -86,12 +89,12 @@ def normalized_box(box: dict) -> dict:
     }
 
 
-def registration(anchor: np.ndarray, calibration: str) -> np.ndarray:
+def registration(anchor: np.ndarray, calibration: str, height: float | None = None) -> np.ndarray:
     """Return one fixed transform for the whole clip."""
     body = body_metrics(anchor)
     target = TARGETS[calibration]
     source_center = (body["x0"] + body["x1"]) / 2
-    scale = target["height"] * SIZE[1] / body["height"]
+    scale = (target["height"] if height is None else height) * SIZE[1] / body["height"]
     x = target["center"] * SIZE[0] - source_center * scale
     y = target["foot"] * SIZE[1] - body["y1"] * scale
     return np.float32([[scale, 0, x], [0, scale, y]])
@@ -118,6 +121,20 @@ def normalize(rgba: np.ndarray, matrix: np.ndarray) -> np.ndarray:
     return np.round(
         np.clip(np.concatenate((rgb, alpha), axis=2), 0, 1) * 255
     ).astype(np.uint8)
+
+
+def restore_top_edge(current: np.ndarray, reference: np.ndarray, box: dict) -> np.ndarray:
+    """Align the visible crown to an intact pose from the same take and extend only above the source."""
+    rows = current[:12, :, 3]
+    occupied = np.flatnonzero(rows.max(axis=0) > 32)
+    left = max(0, occupied[0] - 20)
+    patch = rows[:, left:occupied[-1] + 21]
+    search = reference[:box["height"] // 2, :, 3]
+    _, _, (ref_x, ref_y), _ = cv2.minMaxLoc(cv2.matchTemplate(search, patch, cv2.TM_SQDIFF))
+    if ref_y == 0:
+        return current
+    top = np.roll(reference[:ref_y], left - ref_x, axis=1)
+    return np.concatenate((top, current), axis=0)
 
 
 def blend_premultiplied(source: np.ndarray, target: np.ndarray, weight: float) -> np.ndarray:
@@ -182,6 +199,7 @@ def encode(
     dest: Path,
     loop: bool,
     sleep_seam: bool,
+    compact_loop: bool = False,
 ) -> None:
     pending = dest.with_suffix(".tmp.webm")
     cmd = [
@@ -194,8 +212,9 @@ def encode(
     if loop:
         # Exact terminal frame plus an independent terminal key frame guarantees
         # a deterministic decoded loop point while retaining normal prediction.
+        cmd += (["-b:v", "0", "-crf", "24", "-qmin", "24", "-qmax", "24"] if compact_loop else ["-lossless", "1"])
         cmd += [
-            "-lossless", "1", "-auto-alt-ref", "0",
+            "-auto-alt-ref", "0",
             "-force_key_frames", f"expr:eq(n,0)+eq(n,{len(frames) - 1})",
         ]
     elif sleep_seam:
@@ -298,6 +317,8 @@ def inspect(
             min(b["y1"] for b in boxes32) / SIZE[1],
             max(b["y1"] for b in boxes32) / SIZE[1],
         ],
+        "centerRangePercent": [f((b["x0"] + b["x1"]) / 2 / SIZE[0] for b in boxes32) for f in (min, max)],
+        "heightRangePercent": [f(b["height"] / SIZE[1] for b in boxes32) for f in (min, max)],
         "maxDetachedComponents": max_components,
         "loopSeam": {
             "exact": endpoint_exact,
@@ -320,17 +341,39 @@ def process_clip(name: str, ffmpeg: str, output: Path, report_dir: Path) -> dict
     if not cap.isOpened():
         raise ValueError(f"Cannot open source: {source}")
     fps = float(cap.get(cv2.CAP_PROP_FPS))
-    keyed = []
+    source_size = [int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))]
+    frames = []
+    matrix = None
+    intact = None
+    extended = 0
     while True:
         ok, bgr = cap.read()
         if not ok:
             break
-        keyed.append(key_rgba(bgr))
+        keyed = key_rgba(bgr)
+        if name in ("sitdown", "startled"):
+            box = body_metrics(keyed)
+            if box["y0"] > 0:
+                # At 4s the seated curl has the same upright profile as the final stance.
+                if name == "startled" or len(frames) == 93:
+                    intact = keyed
+            elif intact is not None:
+                keyed = restore_top_edge(keyed, intact, box)
+                extended += 1
+        if name in EXTENSIONS:
+            height = TARGETS["standing"]["height"]
+            if name == "sitdown":
+                # The approved take sits during 0.25–1s and stands during 7.5–8.75s.
+                t = len(frames) / fps
+                seated = float(np.clip(min((t - .25) / .75, (8.75 - t) / 1.25), 0, 1))
+                height += (TARGETS["sleep"]["height"] - height) * seated
+            matrix = registration(keyed, calibration, height)
+        elif matrix is None:
+            matrix = registration(keyed, calibration)
+        frames.append(normalize(keyed, matrix))
     cap.release()
-    if not keyed or fps <= 0:
-        raise ValueError(f"Invalid source: {source}")
-    matrix = registration(keyed[0], calibration)
-    frames = [normalize(frame, matrix) for frame in keyed]
+    if not frames or fps <= 0 or (name in EXTENSIONS and fps != 24):
+        raise ValueError(f"Invalid source frame count/rate: {source}")
     if loop:
         frames[-1] = frames[0].copy()
     if name in ("sleepstart", "wakeup"):
@@ -340,23 +383,25 @@ def process_clip(name: str, ffmpeg: str, output: Path, report_dir: Path) -> dict
     output.mkdir(parents=True, exist_ok=True)
     dest = output / f"{name}.webm"
     sleep_seam = name in ("sleepstart", "wakeup")
-    encode(ffmpeg, frames, fps, dest, loop, sleep_seam)
+    encode(ffmpeg, frames, fps, dest, loop, sleep_seam, compact_loop=name in EXTENSIONS and loop)
+    if name in EXTENSIONS and dest.stat().st_size > 3_000_000:
+        raise ValueError(f"Expansion clip exceeds 3MB: {dest}")
     metrics, first, last = inspect(ffmpeg, dest, calibration, loop)
     report = {
         "clip": name,
         "source": source.relative_to(ROOT).as_posix(),
         "sourceSha256": hashlib.sha256(source.read_bytes()).hexdigest(),
-        "sourceSize": [640, 360],
+        "sourceSize": source_size,
         "sourceFps": fps,
         "mode": "loop" if loop else "once",
         "encodingProfile": (
-            "vp9-alpha-loop-lossless"
+            ("vp9-alpha-loop-q24" if name in EXTENSIONS else "vp9-alpha-loop-lossless")
             if loop
             else ("vp9-alpha-sleep-crf24" if sleep_seam else "vp9-alpha-oneshot-crf28")
         ),
         "calibration": calibration,
         "calibrationTarget": TARGETS[calibration],
-        "fixedAffine": matrix.tolist(),
+        **({"registration": "per-frame centered and foot-aligned", "topEdgeFrames": extended} if name in EXTENSIONS else {"fixedAffine": matrix.tolist()}),
         "output": dest.relative_to(ROOT).as_posix(),
         **metrics,
     }

@@ -55,7 +55,7 @@ const delay = ms => new Promise(r => setTimeout(r, ms));
     };
     for (const clip of Object.keys(require('../config.json').clips)) {
       await play(clip); await delay(250);
-      if (['idle', 'walk', 'doze'].includes(clip)) {
+      if (['idle', 'walk', 'doze', 'dangle'].includes(clip)) {
         await pet.evaluate(() => {
           const video = [...document.querySelectorAll('video')].find(v => v.style.opacity === '1');
           video.currentTime = video.duration - .08;

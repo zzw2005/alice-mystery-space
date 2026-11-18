@@ -27,6 +27,19 @@
     },
     "clicktsun": {
       "file": "clicktsun.webm"
+    },
+    "dangle": {
+      "file": "dangle.webm"
+    },
+    "sitdown": {
+      "file": "sitdown.webm"
+    },
+    "peek": {
+      "file": "peek.webm",
+      "facing": "right"
+    },
+    "startled": {
+      "file": "startled.webm"
     }
   },
   "animations": {
@@ -51,9 +64,9 @@
     ],
     "drag": [
       {
-        "clip": "idle",
+        "clip": "dangle",
         "weight": 1,
-        "provisional": true
+        "loop": true
       }
     ],
     "clicks": [
@@ -149,5 +162,19 @@
   "idleSeconds": [
     45,
     95
-  ]
+  ],
+  "interaction": {
+    "hoverMs": 800,
+    "peekCooldownMs": 10000,
+    "gazeSpeed": 650,
+    "approachSpeed": 1050,
+    "approachWindowMs": 220,
+    "startleLimit": 3,
+    "startleWindowMs": 60000,
+    "landingHeight": 95,
+    "landingSpeed": 590,
+    "awayMs": 600000,
+    "dragTiltSpeed": 1200,
+    "dragTiltDegrees": 7
+  }
 }

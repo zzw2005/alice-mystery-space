@@ -21,12 +21,13 @@ const player = new Player(videos, document.querySelector<HTMLCanvasElement>('#po
   data => { facing = data.facing; direction = data.direction; maskDirty = true; }, () => { maskDirty = true; });
 window.alice.onPlay(data => { void player.play(data); });
 window.alice.onSuspend(() => { capture(); player.suspend(); });
-function mirrored(): boolean { return ['moves', 'drag.walk'].includes(actor.dataset.kind ?? '') && ((facing === 'right' && direction < 0) || (facing === 'left' && direction > 0)); }
+function mirrored(): boolean { return ['moves', 'peek'].includes(actor.dataset.kind ?? '') && ((facing === 'right' && direction < 0) || (facing === 'left' && direction > 0)); }
 window.alice.onPose(pose => {
   direction = pose.direction; squash = reducedMotion.matches ? 1 : pose.squash;
   const sx = 1 + (1 - squash) * .55;
   const mirror = mirrored();
-  const transform = `scale(${(mirror ? -1 : 1) * sx},${squash})`;
+  const rotation = pose.tilt && !reducedMotion.matches ? `rotate(${pose.tilt}deg) ` : '';
+  const transform = `${rotation}scale(${(mirror ? -1 : 1) * sx},${squash})`;
   if (actor.style.transform !== transform) actor.style.transform = transform;
   const shadowTransform = `translateX(-50%) scale(${Math.max(.45, 1 - pose.heightAbove / 500)})`;
   if (shadow.style.transform !== shadowTransform) shadow.style.transform = shadowTransform;

@@ -1,7 +1,9 @@
+import type { InteractionConfig } from './gestures';
 export type Presence = 'idle' | 'thinking' | 'working' | 'result' | 'waiting' | 'success' | 'error';
 export type Entry = { clip: string; weight: number; loop?: boolean; provisional?: boolean };
 export type Action = { clip: string; loop: boolean; kind: string };
 export interface PetConfig {
+  interaction: InteractionConfig;
   animations: {
     idle: Entry[]; turn: Entry[]; drag: Entry[]; clicks: Entry[]; moves: Entry[];
     sleep: { start: Entry[]; loop: Entry[]; end: Entry[] };
@@ -15,6 +17,11 @@ const states = ['thinking', 'working', 'result', 'waiting', 'success', 'error'] 
 export function validateConfig(input: unknown): PetConfig {
   const c = input as PetConfig;
   if (!c || !c.clips || !c.animations || !c.animationWeights) throw Error('Missing animation config');
+  for (const key of ['hoverMs', 'peekCooldownMs', 'gazeSpeed', 'approachSpeed', 'approachWindowMs',
+    'startleLimit', 'startleWindowMs', 'landingHeight', 'landingSpeed', 'awayMs', 'dragTiltSpeed', 'dragTiltDegrees'] as const) {
+    if (!Number.isFinite(c.interaction?.[key]) || c.interaction[key] <= 0) throw Error('Invalid interaction threshold: ' + key);
+  }
+  if (!Number.isInteger(c.interaction.startleLimit)) throw Error('Invalid startle limit');
   for (const [id, clip] of Object.entries(c.clips)) {
     if (!/^[a-z][a-z0-9-]*$/.test(id) || !/^[a-z][a-z0-9-]*\.webm$/.test(clip.file)) throw Error('Unsafe clip path');
   }
@@ -47,6 +54,10 @@ export class Director {
   }
   pick(pool: Entry[], key: string): string { return this.pickEntry(pool, key).clip; }
   play(clip: string, loop: boolean, kind: string): Action { return this.current = { clip, loop, kind }; }
+  gesture(clip: 'sitdown' | 'peek' | 'startled' | 'wave'): Action {
+    this.rest = 'awake'; this.wakePending = false;
+    return this.play(clip, false, clip);
+  }
   base(): Action {
     if (this.rest === 'asleep') return this.play(this.pick(this.config.animations.sleep.loop, 'sleep.loop'), true, 'sleep.loop');
     const s = this.presence;
@@ -55,7 +66,8 @@ export class Director {
     return this.play(this.pick(looping.length ? looping : this.config.animations.idle, 'idle.loop'), true, 'idle');
   }
   react(kind: 'clicks' | 'drag' | 'turn' | 'moves'): Action | null {
-    if (this.rest !== 'awake') { this.wake(); return this.current; }
+    if (kind === 'drag') { this.rest = 'awake'; this.wakePending = false; }
+    else if (this.rest !== 'awake') { this.wake(); return this.current; }
     return this.play(this.pick(this.config.animations[kind], kind), kind === 'drag' || kind === 'moves', kind);
   }
   randomAction(): Action | null {
@@ -83,7 +95,7 @@ export class Director {
   setPresence(state: Presence): Action {
     if (state === this.presence) return this.current;
     this.presence = state;
-    if (this.rest !== 'awake' || this.current.kind === 'drag') return this.current;
+    if (this.rest !== 'awake' || ['drag', 'sitdown', 'startled', 'peek', 'wave'].includes(this.current.kind)) return this.current;
     if (state === 'success' || state === 'error') return this.play(this.pick(this.config.animations.workStatus[state], state), false, state);
     return this.base();
   }
@@ -95,6 +107,7 @@ export class Director {
       return this.base();
     }
     if (this.current.kind === 'sleep.end') this.rest = 'awake';
+    if (['sitdown', 'peek', 'startled', 'wave'].includes(this.current.kind)) return this.play('idle', true, 'idle');
     const queued = this.queue.shift();
     return queued ? this.current = queued : this.base();
   }
@@ -104,8 +117,11 @@ export class Physics {
   x = 0; y = 0; vx = 0; vy = 0;
   mode: 'idle' | 'drag' | 'air' | 'walk' = 'idle';
   targetX = 0; targetY = 0; direction = 1; squash = 1;
+  private peakHeight = 0;
   private impactAt = -1000;
-  step(dt: number, area: { left: number; right: number; top: number; floor: number }, now: number): void {
+  step(dt: number, area: { left: number; right: number; top: number; floor: number }, now: number, cfg?: InteractionConfig): boolean {
+    let hardLanding = false;
+    if (this.mode !== 'air') this.peakHeight = 0;
     dt = Math.min(.05, Math.max(.001, dt));
     if (this.mode === 'drag') {
       // Exact critically damped spring: stable even after a slow frame, with a
@@ -119,11 +135,14 @@ export class Physics {
       this.vy = (this.vy - omega * cy * dt) * decay;
     } else if (this.mode === 'air') {
       for (let i = 0; i < 3; i++) {
+        this.peakHeight = Math.max(this.peakHeight, area.floor - this.y);
         this.vy += 1400 * dt / 3; this.x += this.vx * dt / 3; this.y += this.vy * dt / 3;
         if (this.x < area.left || this.x > area.right) { this.x = Math.max(area.left, Math.min(area.right, this.x)); this.vx = -this.vx * .78; }
         if (this.y < area.top) { this.y = area.top; this.vy = Math.abs(this.vy) * .78; }
         if (this.y >= area.floor) {
-          this.y = area.floor; this.vx = this.vy = 0; this.mode = 'idle'; this.impactAt = now; break;
+          hardLanding = !!cfg && (this.peakHeight > cfg.landingHeight || this.vy > cfg.landingSpeed);
+          this.y = area.floor; this.vx = this.vy = 0; this.mode = 'idle';
+          this.impactAt = hardLanding ? -Infinity : now; this.peakHeight = 0; break;
         }
       }
     } else if (this.mode === 'walk') {
@@ -135,6 +154,7 @@ export class Physics {
     this.x = Math.max(area.left, Math.min(area.right, this.x)); this.y = Math.max(area.top, Math.min(area.floor, this.y));
     const u = (now - this.impactAt) / 220;
     this.squash = u >= 0 && u < 1 ? 1 - .25 * Math.sin(u * Math.PI) : 1;
+    return hardLanding;
   }
   release(stale: boolean): void {
     if (stale) this.vx = this.vy = 0;
