@@ -137,6 +137,62 @@ Q版角色原地缩小并淡出，随后从中心逐渐放大恢复。适合完�
 - **转身**：第 2～3 秒（背对时）换  
 - **缩小消失**：第 2～3 秒（完全消失时）换
 
+## 最高准则·素材生产链
+
+绿幕视频变成最终可播放动作的流程如下（按官方素材链），与「最高准则」同级执行：
+
+### 完整流程
+
+```
+绿幕 mp4（video/）
+    ↓
+watermark_step01.py   →  step01/（加水印遮罩）
+    ↓
+chroma_step02.py      →  step02/（自动抠绿幕，变透明）
+    ↓
+normalize_step03.py   →  step03/（归一化分辨率 + 角色居中）
+    ↓
+encode_thumbs.py      →  step04/（转成 640×360 WebM）
+    ↓
+复制到 assets/webm/   →  最终可用动作
+```
+
+### 具体操作
+
+1. **准备源视频**
+   - 把 Muse 生成的绿幕 mp4 按动作名放到仓库的 `video/` 目录
+   - 例如：`video/闭眼过渡.mp4`
+
+2. **安装依赖**
+   ```bash
+   # 需要 Python 3 + ffmpeg + numpy + scipy
+   pip install numpy scipy
+   ```
+
+3. **跑素材链**（在仓库根目录）
+   ```bash
+   python scripts/watermark_step01.py
+   python scripts/chroma_step02.py
+   python scripts/normalize_step03.py
+   python scripts/encode_thumbs.py
+   ```
+
+4. **拿到最终文件**
+   - 结果在 `step04/` 目录
+   - 把 `.webm` 复制到 `Alice-pet/assets/webm/`
+
+5. **（可选）手动抠像更干净**
+   如果自动抠像边缘不好，可以用 Premiere 手动抠，导出带 Alpha 的 `.mov` 放到 `pr/`，然后跑：
+   ```bash
+   python scripts/pr_import_step02.py
+   ```
+
+### 注意事项
+
+- 源视频必须是 **纯绿幕 #00FF00**，角色位置符合强制规则，首尾帧一致
+- 中间目录 `step01`~`step04` 是临时产物，可以不保留
+- macOS 还需要额外生成 HEVC `.mov`（官方有单独的 Release 和脚本）
+
 ## 她是谁
 
 - 扁平 2D 红发少女：珊瑚红蓬松微卷长发、头顶大呆毛、侧发小翘角；白衬衫＋红领结＋棕色背带格裙、白袜棕鞋；大红眼睛、腮红。
