@@ -21,7 +21,7 @@ const player = new Player(videos, document.querySelector<HTMLCanvasElement>('#po
   data => { facing = data.facing; direction = data.direction; maskDirty = true; }, () => { maskDirty = true; });
 window.alice.onPlay(data => { void player.play(data); });
 window.alice.onSuspend(() => { capture(); player.suspend(); });
-function mirrored(): boolean { return actor.dataset.kind === 'moves' && ((facing === 'right' && direction < 0) || (facing === 'left' && direction > 0)); }
+function mirrored(): boolean { return ['moves', 'drag.walk'].includes(actor.dataset.kind ?? '') && ((facing === 'right' && direction < 0) || (facing === 'left' && direction > 0)); }
 window.alice.onPose(pose => {
   direction = pose.direction; squash = reducedMotion.matches ? 1 : pose.squash;
   const sx = 1 + (1 - squash) * .55;
@@ -41,10 +41,19 @@ window.alice.onPose(pose => {
 });
 actor.addEventListener('pointerdown', event => {
   if (event.button !== 0 || !lastHit) return;
-  actor.setPointerCapture(event.pointerId); window.alice.pointer('down');
+  actor.classList.add('pressed'); actor.setPointerCapture(event.pointerId); window.alice.pointer('down');
 });
-actor.addEventListener('pointerup', event => { if (event.button === 0) { window.alice.pointer('up'); if (actor.hasPointerCapture(event.pointerId)) actor.releasePointerCapture(event.pointerId); } });
-actor.addEventListener('pointercancel', () => window.alice.pointer('up'));
+actor.addEventListener('pointerup', event => { if (event.button === 0) { actor.classList.remove('pressed'); window.alice.pointer('up'); if (actor.hasPointerCapture(event.pointerId)) actor.releasePointerCapture(event.pointerId); } });
+actor.addEventListener('lostpointercapture', () => actor.classList.remove('pressed'));
+actor.addEventListener('pointercancel', () => { actor.classList.remove('pressed'); window.alice.pointer('up'); });
 actor.addEventListener('dblclick', () => window.alice.pointer('double'));
 actor.addEventListener('contextmenu', event => { event.preventDefault(); if (lastHit) window.alice.pointer('menu'); });
+const bubble = document.querySelector<HTMLElement>('#bubble')!;
+const queue: string[] = [];
+function nextBubble(): void {
+  const text = queue.shift();
+  bubble.hidden = text === undefined;
+  if (text !== undefined) { bubble.textContent = text; setTimeout(nextBubble, 2100); }
+}
+window.alice.onBubble(text => { queue.push(text); if (bubble.hidden) nextBubble(); });
 window.alice.ready('pet');

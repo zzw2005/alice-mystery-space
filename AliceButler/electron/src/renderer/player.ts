@@ -122,7 +122,7 @@ export class Player {
       incoming.style.opacity = '1';
       incoming.onended = () => { this.frame(); if (this.request) window.alice.ended(this.request.token); };
       incoming.onwaiting = incoming.onseeking = () => this.hold(incoming);
-      incoming.onerror = () => { this.hold(incoming); window.alice.videoError(`${data.clip}: ${incoming.error?.message || 'media decode failed'}`); };
+      incoming.onerror = () => { this.hold(incoming); window.alice.videoError(`${data.clip}: ${incoming.error?.message || 'media decode failed'}`, this.request?.token); };
       this.actor.dataset.suspended = 'false';
       this.fading = this.hasPoster;
       if (!this.hasPoster) this.snapshot(incoming);
@@ -132,7 +132,7 @@ export class Player {
         if (!this.buffering) this.poster.style.opacity = '0';
       }, 190);
     } catch (error) {
-      if (!signal.aborted) { this.release(incoming); window.alice.videoError(`${data.clip}: ${String(error)}`); }
+      if (!signal.aborted) { this.release(incoming); window.alice.videoError(`${data.clip}: ${String(error)}`, data.token); }
     } finally {
       clearTimeout(timeout); incoming.cancelVideoFrameCallback(firstFrameId);
       if (this.pending === controller) {
