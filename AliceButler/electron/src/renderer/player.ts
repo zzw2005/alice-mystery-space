@@ -48,7 +48,7 @@ export class Player {
     frame.copyTo(this.pixels, { format: 'RGBA' }).then(() => {
       if (version !== this.posterVersion || video !== this.video || this.suspended || this.fading) return;
       this.posterContext.putImageData(this.image, 0, 0); this.hasPoster = true;
-    }).catch(error => window.alice.videoError(`poster: ${String(error)}`)).finally(() => {
+    }).catch(() => window.alice.videoError('poster')).finally(() => {
       frame.close(); this.copying = false;
     });
   }
@@ -174,7 +174,7 @@ export class Player {
       incoming.style.opacity = '1';
       incoming.onended = () => { this.frame(); if (this.request) window.alice.ended(this.request.token); };
       incoming.onwaiting = incoming.onseeking = () => this.hold(incoming);
-      incoming.onerror = () => { this.hold(incoming); window.alice.videoError(`${data.clip}: ${incoming.error?.message || 'media decode failed'}`, this.request?.token); };
+      incoming.onerror = () => { this.hold(incoming); window.alice.videoError('decode', this.request?.token); };
       this.actor.dataset.suspended = 'false';
       this.fading = !!fade;
       if (!this.hasPoster || this.actor.dataset.reclaim) this.snapshot(incoming);
@@ -183,8 +183,8 @@ export class Player {
         this.finishFade(); if (!this.buffering) this.snapshot(incoming);
         if (!this.buffering) this.poster.style.opacity = '0';
       }, fade ? fade + 10 : 0);
-    } catch (error) {
-      if (!signal.aborted) { this.release(incoming); window.alice.videoError(`${data.clip}: ${String(error)}`, reclaim ? undefined : data.token); }
+    } catch {
+      if (!signal.aborted) { this.release(incoming); window.alice.videoError('first-frame', reclaim ? undefined : data.token); }
     } finally {
       clearTimeout(timeout); incoming.cancelVideoFrameCallback(firstFrameId);
       if (this.pending === controller) {

@@ -19,6 +19,7 @@ const root = process.env.ALICE_PET_ROOT || 'C:\\ProgramData\\AliceButler';
 const testMode = process.env.ALICE_PET_TEST === '1';
 const ui = path.join(__dirname, '../../ui');
 const media = path.join(__dirname, '../../media');
+const petSize = { width: 533, height: 300 };
 const configPath = path.join(app.getAppPath(), 'config.json');
 const bridge = new Bridge(root);
 const physics = new Physics();
@@ -46,9 +47,15 @@ let sampledStats: Record<string, unknown>;
 let ignoringMouse = true;
 let windowX = 0, windowY = 0, lastPose = '';
 const timers: NodeJS.Timeout[] = [];
-function report(error: unknown): void {
-  console.error(error);
-  fs.appendFile(path.join(root, 'pet-error.log'), `${new Date().toISOString()} ${String(error)}\n`).catch(() => {});
+function errorCode(error: unknown): string {
+  if (error instanceof SyntaxError) return 'invalid-json';
+  const code = (error as NodeJS.ErrnoException | undefined)?.code;
+  return typeof code === 'string' && /^E[A-Z0-9_]+$/.test(code) ? code : 'failed';
+}
+function report(operation: string, error?: unknown): void {
+  const message = error === undefined ? operation : operation + ' ' + errorCode(error);
+  console.error(message);
+  fs.appendFile(path.join(root, 'pet-error.log'), `${new Date().toISOString()} ${message}\n`).catch(() => {});
 }
 const statePath = path.join(root, 'pet-position.json');
 let standing = false, desktop: Position, lastSaved = '';
@@ -183,7 +190,7 @@ function finishPress(cursor: Electron.Point, now: number, cancelled: boolean): v
       if (combo) actionRequests.push({ source: 'click-combo' });
       else if (approached && gestures.allowStartle(now, director.config.interaction)) actionRequests.push({ source: 'click-startle' });
       else actionRequests.push({ source: 'click' });
-      if (director.rest === 'awake') toggleChat().catch(report);
+      if (director.rest === 'awake') toggleChat().catch(report.bind(null, 'chat-window'));
     }, director.config.tuning.doubleClickMs);
   } else if (director.current.kind === 'moves') {
     actionRequests.push({ source: 'walk-end' });
@@ -226,12 +233,12 @@ function rollback(id: string): void {
   const helper = path.join(app.getAppPath(), 'rollback.ps1').replace(/'/g, "''");
   const command = `Start-Process pwsh.exe -Verb RunAs -ArgumentList '-NoProfile -File "${helper}" -BackupId ${id}'`;
   const child = spawn('powershell.exe', ['-NoProfile', '-Command', command], { windowsHide: true });
-  child.on('error', report);
+  child.on('error', report.bind(null, 'rollback-launch'));
   child.on('exit', code => { if (code) report('Rollback helper launch failed: ' + code); });
 }
 function menu(): Menu {
   return Menu.buildFromTemplate([
-    { label: '和艾莉丝说话', click: () => { toggleChat().catch(report); } },
+    { label: '和艾莉丝说话', click: () => { toggleChat().catch(report.bind(null, 'chat-window')); } },
     { label: director?.rest === 'awake' ? '睡一会儿' : '起来', click: () => {
       interact({ source: director.rest === 'awake' ? 'menu-sleep' : 'menu-wake' });
     } },
@@ -240,8 +247,8 @@ function menu(): Menu {
     { label: '回到原位', click: () => { finishPress(screen.getCursorScreenPoint(), Date.now(), true); physics.mode = 'idle'; physics.x = area().right - director.config.tuning.homeInsetPx; physics.y = area().floor; } },
     { label: pet?.isVisible() ? '隐藏桌宠' : '显示桌宠', click: () => pet.isVisible() ? pet.hide() : pet.showInactive() },
     { label: '回滚上一版', enabled: backups.length > 0, submenu: backups.map(id => ({ label: id, click: () => rollback(id) })) },
-    { label: '重载动作配置', click: () => loadConfig().catch(report) },
-    { type: 'separator' }, { label: '退出桌宠', click: () => purposefulExit().catch(report) }
+    { label: '重载动作配置', click: () => loadConfig().catch(report.bind(null, 'config-reload')) },
+    { type: 'separator' }, { label: '退出桌宠', click: () => purposefulExit().catch(report.bind(null, 'disable-pet')) }
   ]);
 }
 async function loadConfig(): Promise<void> {
@@ -263,12 +270,19 @@ async function loadConfig(): Promise<void> {
   catch (error) {
     const missing = (error as NodeJS.ErrnoException).code === 'ENOENT';
     const backup = path.join(root, 'config.json.bad-' + Date.now());
-    if (!missing) await fs.copyFile(configPath, backup).catch(e => { if (!['EACCES', 'EPERM'].includes(e.code)) throw e; report(e); });
+    if (!missing) {
+      // A rejected config is arbitrary input. Keep a recovery record without its bytes.
+      try { atomicWrite(backup, JSON.stringify({ reason: errorCode(error) })); }
+      catch (e) {
+        if (!['EACCES', 'EPERM'].includes((e as NodeJS.ErrnoException).code ?? '')) throw e;
+        report('config-recovery-record', e);
+      }
+    }
     config = validateConfig(JSON.parse(defaults));
     try { atomicWrite(configPath, defaults); }
     catch (e) { if (!['EACCES', 'EPERM', 'EROFS'].includes((e as NodeJS.ErrnoException).code ?? '')) throw e; }
     configNotice = missing ? '配置缺失，已使用内置默认值。' : '读取配置失败，已启用内置默认值。';
-    report(error); notifyConfig();
+    report('config-load', error); notifyConfig();
   }
   if (director) { director.replaceConfig(config); gestures.resetClicks(); actionRequests.push({ source: 'config-reload' }); }
   else director = new Director(config);
@@ -308,7 +322,7 @@ async function setup(): Promise<void> {
   await fs.mkdir(root, { recursive: true });
   runStats = new RunStats(statsPath);
   await loadConfig();
-  pet = new BrowserWindow({ ...windowOptions(), width: 533, height: 300, transparent: true, hasShadow: false, title: '艾莉丝桌宠' });
+  pet = new BrowserWindow({ ...windowOptions(), ...petSize, transparent: true, hasShadow: false, title: '艾莉丝桌宠' });
   secureWindow(pet);
   pet.on('hide', () => { hiddenByUser = true; });
   pet.on('show', () => { hiddenByUser = false; lowActivityAt = 0; if (suspended || parkPending) dispatch([{ source: 'resume' }]); });
@@ -321,7 +335,7 @@ async function setup(): Promise<void> {
   standing = saved?.standing ?? false;
   place(saved?.position); desktop = saved?.desktop ?? position();
   windowX = Math.round(physics.x); windowY = Math.round(physics.y);
-  pet.setBounds({ x: windowX, y: windowY, width: 533, height: 300 });
+  pet.setBounds({ x: windowX, y: windowY, ...petSize });
   pet.setIgnoreMouseEvents(true, { forward: true });
   ipcMain.on('renderer-ready', event => {
     if (!trusted(event, pet)) return;
@@ -359,12 +373,14 @@ async function setup(): Promise<void> {
       const bounds = area(); physics.targetX = Math.max(bounds.left, Math.min(bounds.right, physics.x + physics.direction * (director.config.tuning.walkMinPx + Math.random() * director.config.tuning.walkExtraPx)));
       physics.mode = 'walk';
     }
-    try { await fs.rm(path.join(root, 'pet-disabled.flag'), { force: true }); atomicWrite(path.join(root, 'pet-start.log'), `electron video ok ${new Date().toISOString()}\n`); } catch (e) { report(e); }
+    try { await fs.rm(path.join(root, 'pet-disabled.flag'), { force: true }); atomicWrite(path.join(root, 'pet-start.log'), `electron video ok ${new Date().toISOString()}\n`); } catch (e) { report('video-ready-state', e); }
   });
   ipcMain.on('probed', (event, day, clips) => {
     if (!trusted(event, pet) || day !== probeDay) return;
-    if (!clips || Object.keys(director.config.clips).some(id => typeof clips[id] !== 'string')) return;
-    atomicWrite(path.join(root, 'pet-decode-check.json'), JSON.stringify({ day, clips }));
+    const names = Object.keys(director.config.clips);
+    if (!clips || names.some(id => !['ok', 'decode-failed', 'decode-timeout'].includes(clips[id]))) return;
+    atomicWrite(path.join(root, 'pet-decode-check.json'), JSON.stringify({ day,
+      clips: Object.fromEntries(names.map(id => [id, clips[id]])) }));
   });
   ipcMain.on('reclaimed', async event => {
     if (!trusted(event, pet) || guardBefore === undefined) return;
@@ -374,16 +390,17 @@ async function setup(): Promise<void> {
       const after = memorySample(app.getAppMetrics());
       lastReclaim = { beforeMiB: guardBefore, afterMiB: after.privateMiB, at: new Date().toISOString() };
       await writeStats();
-    } catch (error) { report(error); }
+    } catch (error) { report('playback-reclaim', error); }
     finally { guardBefore = undefined; if (!pet.isDestroyed()) pet.webContents.send('reclaim-done'); }
   });
   ipcMain.on('playback-suspended', event => {
     if (!trusted(event, pet) || !parkPending) return;
-    parkPending = false; suspended = true; trimPlaybackMemory().catch(report);
+    parkPending = false; suspended = true; trimPlaybackMemory().catch(report.bind(null, 'playback-trim'));
   });
   ipcMain.on('video-error', (event, message: unknown, token?: number) => {
     if (!trusted(event, pet)) return;
-    report(`video: ${String(message).slice(0, 500)}`);
+    const reason = message === 'poster' || message === 'first-frame' ? message : 'decode';
+    report('video-' + reason);
     if (token === lastClipToken) dispatch([{ source: 'media-fallback' }]);
   });
   ipcMain.on('ended', (event, token: unknown) => {
@@ -428,7 +445,7 @@ async function setup(): Promise<void> {
   messages = await bridge.history();
   tray = new Tray(nativeImage.createFromPath(path.join(ui, 'avatar.ico')));
   await refreshBackups();
-  tray.setToolTip('艾莉丝 · 在岗'); tray.setContextMenu(menu()); tray.on('double-click', () => { toggleChat().catch(report); });
+  tray.setToolTip('艾莉丝 · 在岗'); tray.setContextMenu(menu()); tray.on('double-click', () => { toggleChat().catch(report.bind(null, 'chat-window')); });
   notifyConfig();
   // A deploy or rollback restarts the pet and refreshes the backup list.
 
@@ -491,7 +508,12 @@ function startTimers(): void {
     if (physics.mode === 'idle' && director.rest === 'awake') actionRequests.push(...automaticRequests);
     if (ready && actionRequests.length) dispatch(actionRequests.splice(0), wallNow);
     const x = Math.round(physics.x), y = Math.round(physics.y);
-    if (windowX !== x || windowY !== y) { pet.setPosition(x, y); windowX = x; windowY = y; if (chat?.isVisible()) followChat(chat); }
+    if (windowX !== x || windowY !== y) {
+      // Round-tripping native bounds through setPosition grows the window on fractional DPI.
+      pet.setBounds({ x, y, ...petSize });
+      windowX = x; windowY = y;
+      if (chat?.isVisible()) followChat(chat);
+    }
     const pose = { x: cursor.x - x, y: cursor.y - y, squash: physics.squash, direction: director.current.kind === 'peek' ? gestures.direction : physics.direction,
       tilt: physics.mode === 'drag' && press?.state === 'drag' ? Math.max(-1, Math.min(1, physics.vx / cfg.dragTiltSpeed)) * cfg.dragTiltDegrees : 0, dragging: physics.mode === 'drag', heightAbove: Math.max(0, bounds.floor - y) };
     const key = JSON.stringify(pose);
@@ -510,8 +532,8 @@ function startTimers(): void {
     deliverReplies();
     for (const [id, at] of pending) if (Date.now() - at > tuning.replyTimeoutMs) pending.delete(id);
     sendChat();
-  }).catch(report).finally(() => { pollRunning = false; }); } }, tuning.replyPollMs));
-  timers.push(setInterval(() => { if (!statusRunning) { statusRunning = true; statusTick().catch(report).finally(() => { statusRunning = false; }); } }, tuning.statusPollMs));
+  }).catch(report.bind(null, 'reply-poll')).finally(() => { pollRunning = false; }); } }, tuning.replyPollMs));
+  timers.push(setInterval(() => { if (!statusRunning) { statusRunning = true; statusTick().catch(report.bind(null, 'status-poll')).finally(() => { statusRunning = false; }); } }, tuning.statusPollMs));
   timers.push(setInterval(() => {
     const sample = memorySample(app.getAppMetrics());
     runStats.recordMemory(sample.workingSetMiB, sample.privateMiB);
@@ -521,7 +543,7 @@ function startTimers(): void {
       pet.webContents.send('reclaim');
     }
   }, tuning.memoryPollMs));
-  timers.push(setInterval(() => heartbeat().catch(report), tuning.heartbeatMs));
+  timers.push(setInterval(() => heartbeat().catch(report.bind(null, 'heartbeat')), tuning.heartbeatMs));
   timers.push(setInterval(() => writeStats(), tuning.statsMs));
 }
 async function heartbeat(): Promise<void> {
@@ -537,7 +559,7 @@ async function statusTick(): Promise<void> {
       const names: Record<Presence, string> = { idle: '在岗', thinking: '思考中', working: '忙碌中', result: '整理中', waiting: '等待中', success: '已完成', error: '出问题了' };
       presenceNote = typeof p.note === 'string' && p.note.trim() ? p.note.slice(0, 200) : names[state];
     }
-  } catch (e) { if ((e as NodeJS.ErrnoException).code !== 'ENOENT' && !(e instanceof SyntaxError)) report(e); }
+  } catch (e) { if ((e as NodeJS.ErrnoException).code !== 'ENOENT' && !(e instanceof SyntaxError)) report('presence-read', e); }
   actionRequests.push({ source: 'presence', state, valid });
   await healthTick();
   tray.setToolTip(((healthWarning ? '⚠ 每日自检异常 · ' : '') + '艾莉丝 · ' + presenceNote).slice(0, 120)); sendChat();
@@ -607,5 +629,5 @@ else {
     if (pet && desktop) { savePosition(); writeStats(false); }
     timers.forEach(clearInterval);
   });
-  app.whenReady().then(setup).catch(e => { report(e); app.exit(1); });
+  app.whenReady().then(setup).catch(e => { report('setup', e); app.exit(1); });
 }

@@ -323,8 +323,9 @@ setInterval(writeStatus, config.runner.heartbeatMs);
 setTimeout(housekeeping, config.runner.initialSweepMs);
 setInterval(housekeeping, config.runner.sweepMs);
 
-const checkPet = require("./daily-check").dailyCheck(HOME, config);
+const { dailyCheck, diagnosticCode } = require("./daily-check");
+const checkPet = dailyCheck(HOME, config);
 setTimeout(() => {
-  const tick = () => { try { checkPet(); } catch (error) { event("每日自检失败：" + error.message); } };
+  const tick = () => { try { checkPet(); } catch (error) { event("每日自检失败：" + diagnosticCode(error)); } };
   tick(); setInterval(tick, config.runner.heartbeatMs);
 }, config.runner.initialSweepMs);

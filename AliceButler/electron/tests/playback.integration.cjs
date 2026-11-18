@@ -93,7 +93,14 @@ const delay = ms => new Promise(r => setTimeout(r, ms));
     await pet.waitForFunction(() => document.querySelector('#actor').dataset.suspended === 'true', null, { timeout: 5000 });
     await app.evaluate(() => global.aliceTest.wake());
     await pet.waitForFunction(() => document.querySelector('#actor').dataset.clip === 'wakeup');
-    await pet.waitForFunction(() => document.querySelector('#actor').dataset.kind === 'idle', null, { timeout: 16000 });
+    const wakeToken = await pet.locator('#actor').getAttribute('data-token');
+    // After a long sleep an overdue random action can supersede the idle load
+    // before its first frame. Wake succeeds when the next awake clip presents.
+    await pet.waitForFunction(token => {
+      const actor = document.querySelector('#actor');
+      return Number(actor.dataset.token) > Number(token) && !actor.dataset.kind.startsWith('sleep.');
+    }, wakeToken, { timeout: 16000 });
+    assert.equal((await app.evaluate(() => global.aliceTest.state())).rest, 'awake');
     await app.evaluate(() => global.aliceTest.hide()); await delay(1200);
     await app.evaluate(() => global.aliceTest.ageLowActivity(120001));
     await pet.waitForFunction(() => document.querySelector('#actor').dataset.suspended === 'true', null, { timeout: 5000 });

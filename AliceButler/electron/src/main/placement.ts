@@ -18,7 +18,7 @@ export function loadPosition(file: string): Saved | undefined {
       p && Number.isInteger(p.display) && Number.isFinite(p.x) && Number.isFinite(p.y))) throw Error('Invalid saved pet position');
     return state;
   } catch (e) {
-    if ((e as NodeJS.ErrnoException).code !== 'ENOENT') console.error(e);
+    if ((e as NodeJS.ErrnoException).code !== 'ENOENT') console.error('pet-position-read: invalid or unreadable');
     return undefined;
   }
 }

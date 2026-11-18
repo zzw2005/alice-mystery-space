@@ -6,15 +6,13 @@ export async function probeClips(clips: Record<string, string>, timeoutMs: numbe
   for (const [name, url] of Object.entries(clips)) {
     let timer = 0;
     try {
-      await new Promise<void>((resolve, reject) => {
-        timer = window.setTimeout(() => reject(Error('decode timeout')), timeoutMs);
-        video.onloadeddata = () => resolve();
-        video.onerror = () => reject(Error(video.error?.message || 'decode failed'));
+      results[name] = await new Promise<string>(resolve => {
+        timer = window.setTimeout(() => resolve('decode-timeout'), timeoutMs);
+        video.onloadeddata = () => resolve('ok');
+        video.onerror = () => resolve('decode-failed');
         video.src = url; video.load();
       });
-      results[name] = 'ok';
-    } catch (error) { results[name] = String(error); }
-    finally {
+    } finally {
       clearTimeout(timer); video.onloadeddata = video.onerror = null;
       video.removeAttribute('src'); video.load();
     }

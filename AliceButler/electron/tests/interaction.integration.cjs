@@ -263,7 +263,7 @@ test('Electron skips damaged media and restores a broken config with one notific
     assert.equal((await state()).configNotified, true);
     assert.equal(await app.evaluate(() => global.configBalloons), 1);
     const copies = await Promise.all((await fs.readdir(root)).filter(name => name.startsWith('config.json.bad-')).map(name => fs.readFile(path.join(root, name), 'utf8')));
-    assert.deepEqual(copies.sort(), ['{', '{"clips":{}}'].sort());
+    assert.deepEqual(copies.map(copy => JSON.parse(copy).reason).sort(), ['failed', 'invalid-json']);
 
     await fs.copyFile(path.join(source, 'media/wave.webm'), path.join(appPath, 'media/wave.webm'));
     await app.evaluate(() => global.aliceTest.menu().items.find(item => item.label === '重载动作配置').click());

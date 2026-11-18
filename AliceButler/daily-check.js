@@ -3,6 +3,12 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
 
+// Keep diagnostic failures useful without copying native paths, stderr or JSON excerpts.
+function diagnosticCode(error) {
+  if (error instanceof SyntaxError) return "invalid-json";
+  return typeof error?.code === "string" && /^E[A-Z0-9_]+$/.test(error.code) ? error.code : "check-failed";
+}
+
 function dailyCheck(root, config) {
   let finishedDay, request;
   const read = name => JSON.parse(fs.readFileSync(path.join(root, name), "utf8"));
@@ -17,7 +23,7 @@ function dailyCheck(root, config) {
   }
   function inspect(check) {
     try { return check(); }
-    catch (error) { return { ok: false, error: error.message }; }
+    catch (error) { return { ok: false, error: diagnosticCode(error) }; }
   }
   function alive(pid) {
     if (!Number.isSafeInteger(pid) || pid <= 0) throw Error("missing pid");
@@ -36,14 +42,19 @@ function dailyCheck(root, config) {
       request = optional("pet-check-request.json");
       if (request?.day !== day) { request = { day, ts }; write("pet-check-request.json", request); }
     }
-    const decode = inspect(() => optional("pet-decode-check.json"));
+    const probe = inspect(() => ({ ok: true, data: optional("pet-decode-check.json") }));
+    const decode = probe.data;
     if (decode?.day !== day && Date.now() - Date.parse(request.ts) < config.dailyCheck.probeWaitMs) return;
+    const media = decode?.day === day ? inspect(() => {
+      const clips = Object.fromEntries(Object.entries(decode.clips).map(([name, result]) =>
+        [name, result === "ok" || result === "decode-timeout" ? result : "decode-failed"]));
+      return { ok: Object.keys(clips).length > 0 && Object.values(clips).every(v => v === "ok"), clips };
+    }) : { ok: false, error: probe.error || "no decode response for " + day };
     const checks = {
       processes: inspect(() => ({ ok: true, runner: alive(read("status.json").runnerPid), pet: alive(read("pet-stats.json").pid) })),
       runnerHeartbeat: inspect(() => heartbeat(read("status.json").heartbeat, config.watchThresholds.runnerHeartbeatStaleSec)),
       petHeartbeat: inspect(() => heartbeat(fs.readFileSync(path.join(root, "pet-heartbeat.txt"), "utf8").trim(), config.watchThresholds.petHeartbeatStaleSec)),
-      media: decode?.day === day ? { ok: Object.keys(decode.clips).length > 0 && Object.values(decode.clips).every(v => v === "ok"), clips: decode.clips }
-        : { ok: false, error: decode?.error || "no decode response for " + day },
+      media,
       disk: inspect(() => {
         const stat = fs.statfsSync(root), freeMiB = Math.floor(stat.bavail * stat.bsize / 1048576);
         return { ok: freeMiB >= config.dailyCheck.diskMinMiB, freeMiB, minMiB: config.dailyCheck.diskMinMiB };
@@ -53,4 +64,4 @@ function dailyCheck(root, config) {
     finishedDay = day;
   };
 }
-module.exports = { dailyCheck };
+module.exports = { dailyCheck, diagnosticCode };

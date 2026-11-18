@@ -12,6 +12,7 @@ const config = require("./butler-config.json");
 const fs = require("node:fs");
 const path = require("node:path");
 const { execFile } = require("node:child_process");
+const { diagnosticCode } = require("./daily-check");
 
 const LOG = path.join(__dirname, "watchdog.log");
 function logLine(msg) {
@@ -41,9 +42,9 @@ const actions = [];
 if (runnerState !== "ok") {
   actions.push("runner:end+run");
   schtasks(["/end", "/tn", "AliceButler"], (err) => {
-    if (err) logLine("end AliceButler failed: " + err.message);
+    if (err) logLine("end AliceButler failed: " + diagnosticCode(err));
     setTimeout(() => schtasks(["/run", "/tn", "AliceButler"], (e2) => {
-      if (e2) logLine("run AliceButler failed: " + e2.message);
+      if (e2) logLine("run AliceButler failed: " + diagnosticCode(e2));
     }), config.watchdogRestartMs);
   });
 }
@@ -54,17 +55,17 @@ if (petState === "stale" || petState === "missing") {
   const receipt = path.join(__dirname, "pet-restart-request.json");
   let previous;
   try { previous = JSON.parse(fs.readFileSync(path.join(__dirname, "pet-stats.json"), "utf8")); }
-  catch (error) { if (error.code !== "ENOENT") logLine("read pet session: " + error.message); }
+  catch (error) { if (error.code !== "ENOENT") logLine("read pet session: " + diagnosticCode(error)); }
   if (previous?.sessionOpen && previous.sessionId) {
     const temp = receipt + "." + process.pid + ".tmp";
     try {
       fs.writeFileSync(temp, JSON.stringify({ previousSession: previous.sessionId, ts: Date.now(),
         expiresAt: Date.now() + config.watchThresholds.petHeartbeatStaleSec * 1000 }));
       fs.renameSync(temp, receipt);
-    } catch (error) { logLine("write pet recovery receipt: " + error.message); }
+    } catch (error) { logLine("write pet recovery receipt: " + diagnosticCode(error)); }
   }
   schtasks(["/run", "/tn", "AlicePetLaunch"], (err) => {
-    if (err) { logLine("run AlicePetLaunch failed: " + err.message); fs.rmSync(receipt, { force: true }); }
+    if (err) { logLine("run AlicePetLaunch failed: " + diagnosticCode(err)); fs.rmSync(receipt, { force: true }); }
   });
 }
 logLine("check runner=" + runnerState + " pet=" + petState + " action=" + (actions.length ? actions.join(",") : "none"));
