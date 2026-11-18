@@ -1,0 +1,43 @@
+{
+  "day": "2026-11-18",
+  "ts": "2026-11-18T08:36:17.400Z",
+  "ok": true,
+  "checks": {
+    "processes": {
+      "ok": true,
+      "runner": 13537,
+      "pet": 13543
+    },
+    "runnerHeartbeat": {
+      "ok": true,
+      "ageMs": 501
+    },
+    "petHeartbeat": {
+      "ok": true,
+      "ageMs": 1583
+    },
+    "media": {
+      "ok": true,
+      "clips": {
+        "idle": "ok",
+        "walk": "ok",
+        "wave": "ok",
+        "sleepstart": "ok",
+        "doze": "ok",
+        "wakeup": "ok",
+        "clickhappy": "ok",
+        "clickshy": "ok",
+        "clicktsun": "ok",
+        "dangle": "ok",
+        "sitdown": "ok",
+        "peek": "ok",
+        "startled": "ok"
+      }
+    },
+    "disk": {
+      "ok": true,
+      "freeMiB": 4820,
+      "minMiB": 512
+    }
+  }
+}

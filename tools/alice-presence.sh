@@ -35,8 +35,10 @@ if [ "${1:-}" = "--tick" ]; then
 fi
 
 if [ "${1:-}" = "--refresh-loop" ]; then
+  config_path="$(dirname "$0")/../AliceButler/butler-config.json"
+  refresh_seconds=$(python3 -c 'import json,sys; print(int(json.load(open(sys.argv[1]))["watchThresholds"]["presenceRefreshMin"] * 60))' "$config_path")
   while true; do
-    sleep 480
+    sleep "$refresh_seconds"
     [ -f "$CUR" ] || exit 0
     S=$(sed -n 's/.*"state": *"\([^"]*\)".*/\1/p' "$CUR" | head -1)
     N=$(sed -n 's/.*"note": *"\([^"]*\)".*/\1/p' "$CUR" | head -1)

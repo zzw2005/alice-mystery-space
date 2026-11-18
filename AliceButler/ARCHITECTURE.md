@@ -27,6 +27,18 @@
 
 motion/anim 定时器 16ms；StatusTick 2s；钩子轮询 5s；桌宠 outbox 轮询 1s（独立 bridgeTimer）；runner 心跳过期 90s；pet 心跳过期 180s；presence 有效 12 分钟/续戳 8 分钟；runner 崩溃退避 5s/20s/60s、10 分钟内最多 3 次；坏文件隔离阈值 5 次（回复文件另加文件龄 >90s）。
 
+Electron 桌宠从 `electron/config.json` 的 `interaction` 读取交互阈值。速度和高度使用 Electron 屏幕逻辑像素。
+
+| 动作 | 默认触发条件 |
+|---|---|
+| 悬空被拎 | 拖拽超过现有 4 px 起手距离。横向速度 1200 px/s 时倾角达 7° |
+| 落地坐倒 | 下降高度超过 95 px，或撞地垂直速度超过 590 px/s |
+| 张望与视线追逐 | 身体命中持续 800 ms，或在命中区横划速度达到 650 px/s。一次悬停触发一次，冷却 10 s |
+| 受惊 | 接近速度达到 1050 px/s 后 220 ms 内按下并完成单击。滚动 60 s 内限 3 次 |
+| 回来挥手 | 锁屏或最小化超过 600 s，两者都解除后挥手一次。双击也可直接挥手 |
+
+Electron 剩余可调时间、手势阈值、聊天上限及播放参数集中在 `electron/config.json` 的 `tuning`。旧配置缺少的字段从内置默认值补齐。runner、watchdog 读取同目录的 `butler-config.json`，部署工具从源码目录读取其中的 `deployChecks`。逐项默认值、消费位置和生效时间见 [参数清单](../docs/electron-tuning-inventory.md)。
+
 ## 部署源与运行副本
 
 仓库中的 `AliceButler/` 是源码唯一权威；PC 上的同名文件是运行副本，禁止直接改 PC 副本。旧 WinForms/黑底动画目录已删除，当前正式动作位于 `AliceButler/electron/media/`，部署只走 `tools/deploy-pet.sh`。

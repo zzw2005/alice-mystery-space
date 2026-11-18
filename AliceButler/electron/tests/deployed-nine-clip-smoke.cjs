@@ -3,21 +3,20 @@ const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 
-const executable = process.env.ALICE_PET_EXECUTABLE || process.argv[2];
-const output = process.env.ALICE_SMOKE_OUTPUT || process.argv[3];
-if (!executable) throw new Error('Pass the packaged AlicePetNew.exe path');
-
-(async () => {
+async function smoke({ executable, source, clips: requested, checkUi = false }) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'alice-deployed-smoke-'));
   const app = await electron.launch({
     executablePath: executable,
+    args: [...(process.env.ALICE_TEST_NO_SANDBOX === '1' ? ['--no-sandbox'] : []),
+      '--user-data-dir=' + path.join(root, 'profile'), ...(source ? [source] : [])],
     env: { ...process.env, ALICE_PET_ROOT: root, ALICE_PET_TEST: '1' }
   });
   const errors = [];
-  app.on('window', page => page.on('pageerror', error => errors.push(error.message)));
+  const watch = page => page.on('pageerror', error => errors.push(error.message));
+  app.windows().forEach(watch); app.on('window', watch);
   try {
     let pages = app.windows();
-    for (let i = 0; pages.length < 2 && i < 100; i++) {
+    for (let i = 0; !pages.some(p => p.url().endsWith('pet.html')) && i < 100; i++) {
       await new Promise(resolve => setTimeout(resolve, 100));
       pages = app.windows();
     }
@@ -30,10 +29,11 @@ if (!executable) throw new Error('Pass the packaged AlicePetNew.exe path');
       await new Promise(resolve => setTimeout(resolve, 100));
     }
     if (!testReady) throw new Error('Test interface did not initialize');
-    const config = require('../config.json');
-    const selected = process.env.ALICE_SMOKE_CLIPS
-      ? process.env.ALICE_SMOKE_CLIPS.split(',').map(name => name.trim()).filter(Boolean)
-      : Object.keys(config.clips);
+    const appPath = await app.evaluate(({ app }) => app.getAppPath());
+    const config = JSON.parse(await fs.readFile(path.join(appPath, 'config.json'), 'utf8'));
+    const selected = requested || Object.keys(config.clips);
+    if (checkUi && !requested && (selected.length !== 13 || Object.keys(require('../config.json').clips).some(id => !config.clips[id])))
+      throw Error('Expected all thirteen registered clips');
     for (const clip of selected) {
       if (!config.clips[clip]) throw new Error(`Unknown smoke clip: ${clip}`);
     }
@@ -68,9 +68,30 @@ if (!executable) throw new Error('Pass the packaged AlicePetNew.exe path');
         ...frame
       };
     }
+    if (checkUi) {
+      const opened = app.waitForEvent('window');
+      await app.evaluate(() => global.aliceTest.menu().items.find(i => i.label === '和艾莉丝说话').click());
+      const chat = await opened;
+      await chat.locator('textarea').fill('安装包自检');
+      await chat.locator('#send').click();
+      await chat.getByText('安装包自检', { exact: true }).waitFor();
+      const [name] = (await fs.readdir(path.join(root, 'inbox'))).filter(n => n.endsWith('.json'));
+      const { id } = JSON.parse(await fs.readFile(path.join(root, 'inbox', name), 'utf8'));
+      const outbox = path.join(root, 'outbox'); await fs.mkdir(outbox, { recursive: true });
+      const reply = path.join(outbox, 'reply-' + id + '.json');
+      await fs.writeFile(reply + '.tmp', JSON.stringify({ id, text: '回执已读' }));
+      await fs.rename(reply + '.tmp', reply);
+      await chat.getByText('回执已读', { exact: true }).waitFor();
+      if (!await app.evaluate(() => {
+        const toggle = () => global.aliceTest.menu().items.find(i => i.label === '任务栏站立').click();
+        const initial = global.aliceTest.state().standing;
+        toggle(); const changed = global.aliceTest.state().standing !== initial;
+        toggle(); return changed && global.aliceTest.state().standing === initial;
+      })) throw Error('Tray toggle failed');
+    }
     const result = {
       runtime: 'Electron',
-      executable,
+      executable, appPath, checkUi,
       checkedAt: new Date().toISOString(),
       clips,
       pageErrors: errors,
@@ -78,14 +99,18 @@ if (!executable) throw new Error('Pass the packaged AlicePetNew.exe path');
         clip.loaded && clip.width === 640 && clip.height === 360 &&
         clip.transparent > 100000 && clip.opaqueBlackRatio < 0.05) && errors.length === 0
     };
-    const json = JSON.stringify(result, null, 2) + '\n';
-    if (output) await fs.writeFile(output, json);
-    process.stdout.write(json);
-    if (!result.passed) process.exitCode = 1;
-  } finally {
-    await app.close();
-  }
-})().catch(error => {
-  console.error(error);
-  process.exitCode = 1;
-});
+    return result;
+  } finally { await app.close(); await fs.rm(root, { recursive: true, force: true, maxRetries: 3 }); }
+}
+module.exports = { smoke };
+if (require.main === module) (async () => {
+  const executable = process.env.ALICE_PET_EXECUTABLE || process.argv[2];
+  if (!executable) throw Error('Pass the packaged AlicePetNew executable path');
+  const output = process.env.ALICE_SMOKE_OUTPUT || process.argv[3];
+  const clips = process.env.ALICE_SMOKE_CLIPS?.split(',').map(name => name.trim()).filter(Boolean);
+  const result = await smoke({ executable, clips });
+  const json = JSON.stringify(result, null, 2) + '\n';
+  if (output) await fs.writeFile(output, json);
+  process.stdout.write(json);
+  if (!result.passed) process.exitCode = 1;
+})().catch(error => { console.error(error); process.exitCode = 1; });

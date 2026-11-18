@@ -1,0 +1,29 @@
+{
+  "checks": {
+    "frames": 8976,
+    "gaps": 0,
+    "gapSamples": [],
+    "black": 0,
+    "maxSources": 2,
+    "running": false
+  },
+  "sleepSoak": true,
+  "errors": [],
+  "state": {
+    "action": {
+      "clip": "idle",
+      "loop": true,
+      "kind": "idle"
+    },
+    "token": 49,
+    "rest": "awake",
+    "mode": "idle",
+    "decodedFrames": 3509,
+    "videoReady": true,
+    "ignoringMouse": true,
+    "suspended": false,
+    "startupMs": 310.51718200000005,
+    "x": 876.9000000000001,
+    "y": 543
+  }
+}
