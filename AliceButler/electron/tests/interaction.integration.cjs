@@ -178,13 +178,18 @@ test('Electron closes eyes for wardrobe changes and a real click supersedes the 
       for (let i = 0; i < 2; i++) { window.alice.pointer('down'); window.alice.pointer('up'); }
     });
     await pet.waitForFunction(() => window.duckPlays.length === 1);
-    await delay(120);
-    await pointer(pet, 'down');
-    await pointer(pet, 'up');
-    await pet.waitForFunction(() => window.duckPlays.length === 2);
     await pet.waitForFunction(() => document.querySelector('#actor').dataset.kind === 'clicks', null, { timeout: 2000 });
     const counts = Object.values((await stats()).days).map(day => day.cancelled?.superseded ?? 0);
     assert.equal(counts.at(-1), 1);
+
+    const firstClickToken = await pet.locator('#actor').getAttribute('data-token');
+    await pointer(pet, 'down');
+    await pointer(pet, 'up');
+    await pet.waitForFunction(() => window.duckPlays.length === 2);
+    await pet.waitForFunction(previous => {
+      const { kind, token } = document.querySelector('#actor').dataset;
+      return kind === 'clicks' && token !== previous;
+    }, firstClickToken, { timeout: 2000 });
     await stopSample(pet);
 
     await app.evaluate(() => global.aliceTest.menu().items.find(i => i.label === '点击音效').click());

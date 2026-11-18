@@ -14,13 +14,23 @@ def main():
     parser.add_argument('--audit', type=Path, help='write per-clip body ranges and endpoint measurements')
     parser.add_argument('--sleep-only', action='store_true', help='measure only the sleep relay and idle loop')
     args = parser.parse_args()
-    clips = json.loads((args.app / 'config.json').read_text(encoding='utf8'))['clips']
+    config = json.loads((args.app / 'config.json').read_text(encoding='utf8'))
+    clips = config['clips']
     loops = ('idle', 'doze') if args.sleep_only else ('idle', 'walk', 'doze', 'dangle', 'peek')
     limits = {(name, name): 0 for name in loops if name != 'walk' or name in clips}
     # Compare with the accepted phase-one RGBA measurements.
     limits.update({('sleepstart', 'doze'): .132886, ('doze', 'wakeup'): .132886, ('wakeup', 'idle'): 1.316981})
     if args.sleep_only:
         clips = {name: clips[name] for pair in limits for name in pair}
+    else:
+        transitions = config.get('skinTransition') or {}
+        if 'file' in transitions:
+            transitions = {'uniform': transitions}
+        for skin in ('uniform', 'wafuku'):
+            if skin in transitions:
+                name = f'skinTransition.{skin}'
+                clips[name] = transitions[skin]
+                limits[name, name] = 0
     if args.audit:
         pipeline = runpy.run_path(str(Path(__file__).with_name('process-green.py')))
     ends, boxes = {}, {}
