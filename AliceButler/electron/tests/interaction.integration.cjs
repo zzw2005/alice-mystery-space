@@ -123,17 +123,19 @@ test('Electron closes eyes for wardrobe changes and a real click supersedes the 
       window.activeVideo = active;
       window.closedFrames = [];
       window.blinkStarts = [];
-      let displayingBlink = false;
+      let previousSource;
       const observeBlink = new MutationObserver(() => {
         const video = active();
-        const nextIsBlink = !!video?.src.endsWith('/blink-uniform.webm');
-        if (nextIsBlink && !displayingBlink) window.blinkStarts.push(video.currentTime);
-        displayingBlink = nextIsBlink;
+        const source = video?.src.split('/').at(-1);
+        if (source?.startsWith('blink-') && source !== previousSource)
+          window.blinkStarts.push({ source, time: video.currentTime });
+        previousSource = source;
       });
       for (const video of document.querySelectorAll('video')) observeBlink.observe(video, { attributeFilter: ['style'] });
       const pause = HTMLMediaElement.prototype.pause;
       HTMLMediaElement.prototype.pause = function () {
-        if (this.src.endsWith('/blink-uniform.webm') && !this.paused) window.closedFrames.push(this.currentTime);
+        const source = this.src.split('/').at(-1);
+        if (source.startsWith('blink-') && !this.paused) window.closedFrames.push({ source, time: this.currentTime });
         return pause.call(this);
       };
       const play = HTMLMediaElement.prototype.play;
@@ -145,15 +147,30 @@ test('Electron closes eyes for wardrobe changes and a real click supersedes the 
       };
     });
     await startSample(pet, false);
+    const seekToEnd = () => pet.evaluate(() => { const v = window.activeVideo(); v.currentTime = v.duration - .05; });
+    const observedBlinks = () => pet.evaluate(() => window.blinkStarts);
+    const closed = time => time >= 2 && time < 3;
     await app.evaluate(() => global.aliceTest.play('sword'));
-    await pet.waitForFunction(() => window.activeVideo()?.src.endsWith('/blink-uniform.webm'));
     await waitClip(pet, 'sword');
-    const closedAt = await pet.evaluate(() => window.closedFrames[0]);
-    assert.ok(closedAt >= 2 && closedAt < 3, `closed frame at ${closedAt}s`);
-    await pet.evaluate(() => { const v = window.activeVideo(); v.currentTime = v.duration - .05; });
-    const returnAt = await (await pet.waitForFunction(() => window.blinkStarts[1])).jsonValue();
-    assert.ok(returnAt >= 2 && returnAt < 3, `return frame at ${returnAt}s`);
+    await seekToEnd();
     await waitClip(pet, 'idle', 'idle');
+    const blinks = await observedBlinks();
+    assert.deepEqual(blinks.map(frame => frame.source), [
+      'blink-uniform.webm', 'blink-wafuku.webm', 'blink-wafuku.webm', 'blink-uniform.webm'
+    ]);
+    assert.ok(blinks[0].time < 1 && blinks[2].time < 1);
+    assert.ok(closed(blinks[1].time) && closed(blinks[3].time), JSON.stringify(blinks));
+    const closingFrames = await pet.evaluate(() => window.closedFrames);
+    assert.deepEqual(closingFrames.map(frame => frame.source), ['blink-uniform.webm', 'blink-wafuku.webm']);
+    assert.ok(closingFrames.every(frame => closed(frame.time)), JSON.stringify(closingFrames));
+
+    await app.evaluate(() => global.aliceTest.play('afterimage'));
+    await waitClip(pet, 'afterimage');
+    await seekToEnd();
+    await waitClip(pet, 'idle', 'idle');
+    const afterimageBlinks = (await observedBlinks()).slice(4);
+    assert.deepEqual(afterimageBlinks.map(frame => frame.source), ['blink-uniform.webm', 'blink-wafuku.webm', 'blink-uniform.webm']);
+    assert.ok(closed(afterimageBlinks.at(-1).time));
 
     await app.evaluate(() => global.aliceTest.play('sword'));
     await pet.waitForFunction(() => window.activeVideo()?.src.endsWith('/blink-uniform.webm'));
@@ -175,9 +192,13 @@ test('Electron closes eyes for wardrobe changes and a real click supersedes the 
     await app.evaluate(() => global.aliceTest.play('sword'));
     await waitClip(pet, 'sword');
     const beforeActiveCancel = Object.values((await stats()).days).at(-1).cancelled.superseded;
+    const beforeActiveBlinks = (await observedBlinks()).length;
     await pointer(pet, 'down');
     await pointer(pet, 'up');
     await pet.waitForFunction(() => document.querySelector('#actor').dataset.kind === 'clicks', null, { timeout: 2000 });
+    const activeCancelBlinks = (await observedBlinks()).slice(beforeActiveBlinks);
+    assert.deepEqual(activeCancelBlinks.map(frame => frame.source), ['blink-wafuku.webm', 'blink-uniform.webm']);
+    assert.ok(closed(activeCancelBlinks.at(-1).time));
     assert.equal(await pet.evaluate(() => window.duckPlays.length), 2);
     assert.equal(Object.values((await stats()).days).at(-1).cancelled.superseded, beforeActiveCancel + 1);
 
@@ -192,7 +213,7 @@ test('Electron closes eyes for wardrobe changes and a real click supersedes the 
       const { kind, clip } = document.querySelector('#actor').dataset;
       return kind === 'category' && ['laugh', 'meat'].includes(clip);
     });
-    t.diagnostic(`blink closed at ${closedAt.toFixed(3)}s, returned at ${returnAt.toFixed(3)}s`);
+    t.diagnostic(JSON.stringify({ blinks, closingFrames, afterimageBlinks, activeCancelBlinks }));
   });
 });
 

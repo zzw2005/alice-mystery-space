@@ -22,6 +22,15 @@ test('config validates all referenced clips and rejects unsafe paths/weights', (
   broken.clips.idle.file = 'idle.webm'; broken.animations.idle[0].weight = NaN;
   assert.throws(() => validateConfig(broken));
 });
+test('config validates both wardrobe blinks and accepts the original uniform-only format', () => {
+  const { uniform, wafuku } = config.skinTransition;
+  assert.equal(validateConfig(config).skinTransition.wafuku.file, 'blink-wafuku.webm');
+  assert.deepEqual(validateConfig({ ...config, skinTransition: uniform }).skinTransition, { uniform });
+  for (const blink of [{ ...wafuku, file: '../blink.webm' }, { ...wafuku, closedAtSec: 3 }]) {
+    assert.throws(() => validateConfig({ ...config, skinTransition: { uniform, wafuku: blink } }), /Invalid skin transition/);
+  }
+  assert.equal(validateConfig(config).clips.afterimage.endsClosed, true);
+});
 test('weighted picker excludes last item, including with deterministic randomness', () => {
   const director = new Director(config, () => 0);
   const pool = [{ clip: 'a', weight: 1 }, { clip: 'b', weight: 4 }, { clip: 'c', weight: 2 }];

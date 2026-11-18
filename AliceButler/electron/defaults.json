@@ -90,7 +90,9 @@
       "file": "rage.webm"
     },
     "afterimage": {
-      "file": "afterimage.webm"
+      "file": "afterimage.webm",
+      "skin": "wafuku",
+      "endsClosed": true
     },
     "rainstand": {
       "file": "rainstand.webm"
@@ -462,7 +464,13 @@
     "clips": "正式素材文件、默认朝向和着装。未指定 skin 的动作使用制服。"
   },
   "skinTransition": {
-    "file": "blink-uniform.webm",
-    "closedAtSec": 2.5
+    "uniform": {
+      "file": "blink-uniform.webm",
+      "closedAtSec": 2.5
+    },
+    "wafuku": {
+      "file": "blink-wafuku.webm",
+      "closedAtSec": 2.5
+    }
   }
 }

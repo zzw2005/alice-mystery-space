@@ -4,6 +4,8 @@ export type Presence = 'idle' | 'thinking' | 'working' | 'result' | 'waiting' | 
 export type Entry = { clip: string; weight: number; loop?: boolean; provisional?: boolean };
 export type Action = Readonly<{ clip: string; loop: boolean; kind: string; rate: number }>;
 export type Skin = 'uniform' | 'wafuku';
+type BlinkAsset = { file: string; closedAtSec: number };
+type SkinTransitions = { uniform: BlinkAsset; wafuku?: BlinkAsset };
 type WakeSource = 'pointer-wake' | 'chat-open' | 'chat-send' | 'chat-reply' | 'menu-wake';
 type SimpleSource = WakeSource | 'startup' | 'resume' | 'media-fallback' | 'animation-end' | 'placement' |
   'config-reload' | 'hover-exit' | 'drag-release' | 'walk-end' | 'drag' | 'menu-sleep' | 'double-click' |
@@ -49,13 +51,13 @@ export interface PetConfig {
   };
   animationWeights: { idle: number; turn: number; moves: number };
   idleSeconds: [number, number];
-  clips: Record<string, { file: string; facing?: 'left' | 'right'; provisional?: boolean; skin?: Skin }>;
-  skinTransition?: { file: string; closedAtSec: number };
+  clips: Record<string, { file: string; facing?: 'left' | 'right'; provisional?: boolean; skin?: Skin; endsClosed?: boolean }>;
+  skinTransition?: SkinTransitions;
 }
 const states = ['thinking', 'working', 'result', 'waiting', 'success', 'error'] as const;
 const chainKinds = ['idle', 'turn', 'moves'] as const;
 export function validateConfig(input: unknown): PetConfig {
-  const c = input as PetConfig;
+  const c = input as Omit<PetConfig, 'skinTransition'> & { skinTransition?: BlinkAsset | SkinTransitions };
   if (!c || !c.clips || !c.animations || !c.animationWeights) throw Error('Missing animation config');
   for (const key of ['hoverMs', 'peekCooldownMs', 'gazeSpeed', 'approachSpeed', 'approachWindowMs',
     'startleLimit', 'startleWindowMs', 'landingHeight', 'landingSpeed', 'awayMs', 'dragTiltSpeed', 'dragTiltDegrees'] as const) {
@@ -65,6 +67,7 @@ export function validateConfig(input: unknown): PetConfig {
   for (const [id, clip] of Object.entries(c.clips)) {
     if (!/^[a-z][a-z0-9-]*$/.test(id) || !/^[a-z][a-z0-9-]*\.webm$/.test(clip.file)) throw Error('Unsafe clip path');
     if (clip.skin !== undefined && clip.skin !== 'uniform' && clip.skin !== 'wafuku') throw Error('Invalid clip skin');
+    if (clip.endsClosed !== undefined && typeof clip.endsClosed !== 'boolean') throw Error('Invalid clip ending');
   }
   const { reactions, categories, events, moves } = c.animations;
   const pools = [c.animations.idle, c.animations.turn, c.animations.drag, c.animations.clicks,
@@ -81,15 +84,22 @@ export function validateConfig(input: unknown): PetConfig {
   for (const key of chainKinds)
     if (!Number.isFinite(c.animationWeights[key]) || c.animationWeights[key] < 0 ||
         (!c.animations[key].length && c.animationWeights[key] > 0)) throw Error('Invalid chain weight');
-  if (c.skinTransition !== undefined) {
-    const { file, closedAtSec } = c.skinTransition;
-    if (!/^[a-z][a-z0-9-]*\.webm$/.test(file) || !Number.isFinite(closedAtSec) || !(closedAtSec >= 2 && closedAtSec < 3))
-      throw Error('Invalid skin transition');
+  let skinTransition: SkinTransitions | undefined;
+  const transition = c.skinTransition;
+  if (transition !== undefined) {
+    if (!transition || typeof transition !== 'object') throw Error('Invalid skin transition');
+    skinTransition = 'file' in transition ? { uniform: transition } : transition;
+    const { uniform, wafuku } = skinTransition;
+    for (const blink of wafuku === undefined ? [uniform] : [uniform, wafuku]) {
+      if (!blink || typeof blink.file !== 'string' || !/^[a-z][a-z0-9-]*\.webm$/.test(blink.file) ||
+          !Number.isFinite(blink.closedAtSec) || blink.closedAtSec < 2 || blink.closedAtSec >= 3)
+        throw Error('Invalid skin transition');
+    }
   }
   if (!Array.isArray(c.idleSeconds) || c.idleSeconds.length !== 2 || c.idleSeconds.some(v => !Number.isFinite(v)) || c.idleSeconds[0] < 10 || c.idleSeconds[1] < c.idleSeconds[0] || c.idleSeconds[1] > 600) throw Error('Invalid idle interval');
   const triggers = readTriggers(c.triggers);
   if (!c.clips.clicktsun) throw Error('Missing interaction clip: clicktsun');
-  return { ...c, tuning: readTuning(c.tuning), triggers };
+  return { ...c, skinTransition, tuning: readTuning(c.tuning), triggers };
 }
 export class Director {
   private restState: 'awake' | 'entering' | 'asleep' | 'waking' = 'awake';

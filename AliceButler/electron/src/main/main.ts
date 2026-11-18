@@ -19,6 +19,7 @@ const root = process.env.ALICE_PET_ROOT || 'C:\\ProgramData\\AliceButler';
 const testMode = process.env.ALICE_PET_TEST === '1';
 const ui = path.join(__dirname, '../../ui');
 const media = path.join(__dirname, '../../media');
+const mediaUrl = (file: string) => pathToFileURL(path.join(media, file)).href;
 const petSize = { width: 533, height: 300 };
 const configPath = path.join(app.getAppPath(), 'config.json');
 const bridge = new Bridge(root);
@@ -124,9 +125,12 @@ function dispatch(requests: readonly ActionRequest[], now = Date.now()): void {
     const transition = director.config.skinTransition;
     suspended = false; parkPending = false;
     videoReady = false;
-    pet.webContents.send('play', { ...action, tuning: director.config.tuning, token: ++lastClipToken, url: pathToFileURL(path.join(media, clip.file)).href,
-      facing: clip.facing ?? 'right', direction: physics.direction, skin: clip.skin ?? 'uniform',
-      blink: transition && { url: pathToFileURL(path.join(media, transition.file)).href, closedAtSec: transition.closedAtSec },
+    pet.webContents.send('play', { ...action, tuning: director.config.tuning, token: ++lastClipToken, url: mediaUrl(clip.file),
+      facing: clip.facing ?? 'right', direction: physics.direction, skin: clip.skin ?? 'uniform', endsClosed: clip.endsClosed,
+      blink: transition && {
+        uniform: { url: mediaUrl(transition.uniform.file), closedAtSec: transition.uniform.closedAtSec },
+        wafuku: transition.wafuku && { url: mediaUrl(transition.wafuku.file), closedAtSec: transition.wafuku.closedAtSec }
+      },
       interactive: ['click', 'click-combo', 'click-startle', 'double-click', 'drag', 'long-press', 'landing'].includes(source) });
   }
 }
@@ -612,7 +616,7 @@ async function healthTick(): Promise<void> {
   if (request?.day === today && probeDay !== today && ready) {
     probeDay = today;
     const clips = Object.fromEntries(Object.entries(director.config.clips).map(([id, clip]) =>
-      [id, pathToFileURL(path.join(media, clip.file)).href]));
+      [id, mediaUrl(clip.file)]));
     pet.webContents.send('probe', { day: today, clips, timeoutMs: director.config.tuning.firstFrameMs });
   }
   const result = await optionalJson('pet-daily-check.json');

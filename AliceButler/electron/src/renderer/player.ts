@@ -1,9 +1,12 @@
+type Skin = 'uniform' | 'wafuku';
+type Blink = { url: string; closedAtSec: number };
 export type PlayRequest = {
   tuning: DisplayTuning; clip: string; kind: string; loop: boolean; rate: number; token: number;
-  url: string; facing: string; direction: number; skin: 'uniform' | 'wafuku';
-  blink?: { url: string; closedAtSec: number }; interactive?: boolean;
+  url: string; facing: string; direction: number; skin: Skin; endsClosed?: boolean;
+  blink?: { uniform: Blink; wafuku?: Blink }; interactive?: boolean;
 };
 const REASON_SUPERSEDED = 'superseded';
+const BLINK_QUICK_RATE = 3;
 type Swap = { gen: number; controller: AbortController; token?: number };
 type SwapOptions = { reclaim?: boolean; transition?: boolean; cut?: boolean; offset?: number };
 
@@ -149,16 +152,9 @@ export class Player {
     }
 
     try {
-      if (!reclaim && !this.suspended && this.video && this.request?.skin !== data.skin && data.blink) {
-        const { url, closedAtSec } = data.blink;
-        const entering = data.skin === 'wafuku';
-        // Only the uniform has blink footage. Close before entering a sword
-        // action, and return on the matching closed frame before reopening.
-        const blink: PlayRequest = { ...data, url, skin: 'uniform', loop: false, rate: entering ? 1 : 3 };
-        const shown = await this.swap(blink, swap, { transition: true, cut: !entering, offset: entering ? undefined : closedAtSec });
-        const completed = shown && ((!entering && data.interactive) || await this.waitForBlink(swap, entering ? closedAtSec : undefined));
-        if (!completed && this.isCurrent(swap)) window.alice.videoError('skin-transition');
-      }
+      const from = this.request?.skin;
+      if (!reclaim && !this.suspended && this.video && from && from !== data.skin)
+        await this.changeSkin(from, data, swap);
       if (!this.isCurrent(swap)) return;
       const shown = await this.swap(data, swap, { reclaim, cut: this.request?.skin !== data.skin });
       if (!shown && this.isCurrent(swap)) window.alice.videoError('first-frame', reclaim ? undefined : data.token);
@@ -166,12 +162,37 @@ export class Player {
       if (this.pending === swap) this.pending = undefined;
     }
   }
+  private async changeSkin(from: Skin, data: PlayRequest, swap: Swap): Promise<void> {
+    const closing = data.blink?.[from], opening = data.blink?.[data.skin];
+    const blink = { ...data, loop: false, endsClosed: false };
+    const alreadyClosed = this.video?.ended && this.request?.endsClosed;
+    if (closing && !alreadyClosed) {
+      const shown = await this.swap({
+        ...blink, url: closing.url, skin: from, rate: data.interactive ? BLINK_QUICK_RATE : 1
+      }, swap, { transition: true });
+      const closed = shown && await this.waitForBlink(swap, closing.closedAtSec);
+      if (!closed && this.isCurrent(swap)) window.alice.videoError('skin-transition');
+    }
+    if (!opening || !this.isCurrent(swap)) return;
+    // Both 10s assets have a closed frame at 2.5s. Play the remaining 7.5s
+    // in 2.5s to keep a full close/reopen sequence around five seconds.
+    const shown = await this.swap({ ...blink, url: opening.url, rate: BLINK_QUICK_RATE }, swap, {
+      transition: true, cut: true, offset: opening.closedAtSec
+    });
+    if (!this.isCurrent(swap)) return;
+    if (shown && data.interactive) {
+      this.video?.pause();
+      return;
+    }
+    if (!(shown && await this.waitForBlink(swap)) && this.isCurrent(swap))
+      window.alice.videoError('skin-transition');
+  }
   private isCurrent(swap: Swap): boolean {
     return swap.gen === this.swapGen && !swap.controller.signal.aborted;
   }
   private waitForBlink(swap: Swap, closeAt?: number): Promise<boolean> {
-    const video = this.video;
-    if (!video || !this.isCurrent(swap)) return Promise.resolve(false);
+    const video = this.video, request = this.request;
+    if (!video || !request || !this.isCurrent(swap)) return Promise.resolve(false);
     const { signal } = swap.controller;
     return new Promise(resolve => {
       let frameId = 0;
@@ -182,14 +203,16 @@ export class Player {
       };
       const ended = () => finish(closeAt === undefined);
       const failed = () => finish(false);
-      const timeout = window.setTimeout(failed, this.request!.tuning.firstFrameMs);
-      const watch: VideoFrameRequestCallback = (_now, frame) => {
-        if (frame.mediaTime < closeAt!) { frameId = video.requestVideoFrameCallback(watch); return; }
-        video.pause(); finish(true);
-      };
+      const timeout = window.setTimeout(failed, request.tuning.firstFrameMs);
       video.addEventListener('ended', ended); video.addEventListener('error', failed);
       signal.addEventListener('abort', failed, { once: true });
-      if (closeAt !== undefined) frameId = video.requestVideoFrameCallback(watch);
+      if (closeAt !== undefined) {
+        const watch: VideoFrameRequestCallback = (_now, frame) => {
+          if (frame.mediaTime < closeAt) { frameId = video.requestVideoFrameCallback(watch); return; }
+          video.pause(); finish(true);
+        };
+        frameId = video.requestVideoFrameCallback(watch);
+      }
     });
   }
   private async swap(data: PlayRequest, swap: Swap, options: SwapOptions): Promise<boolean> {

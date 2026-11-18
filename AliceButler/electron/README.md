@@ -25,7 +25,7 @@ node tests/deployed-nine-clip-smoke.cjs
 
 `config.json` 是运行时动作配置，`defaults.json` 是恢复副本。保存后约 2 秒重载。随机链先按 `animationWeights` 抽池，再按池内权重抽动作，有多项时排除上次抽中的动作。当前 `moves` 为空，`walk.webm` 留档。进入工作状态播放 `coding`，任务成功播放 `events.done`。聊天回复可通过 `tools/pet-reply.sh <msg-id> <text> [animation-category]` 选用 `categories` 中的单次动作。点击可抢占在播和待换源的单次动作，回报 `cancelled` / `superseded`。右键和托盘菜单的「点击音效」开关保存在运行根目录的 `pet-settings.json`，音效每 100 ms 最多播放一次。
 
-2026-11-19 批次按 [动作清单](../../new-clips-20261119/actions-manifest-20261119.json) 和 [着装规则](../../SKINS.md) 接入。未指定 `skin` 的动作使用制服。制服转入和风时，在 `blink-uniform` 已呈现的 2.50 秒闭眼帧暂停，目标动作首帧就绪后切源。和风回制服时，从同一闭眼位置播到睁眼并回到基础动作。点击等交互抢占从闭眼帧直接接新动作。和风用于指定动作，常驻待机使用制服。
+2026-11-19 批次按 [动作清单](../../new-clips-20261119/actions-manifest-20261119.json) 和 [着装规则](../../SKINS.md) 接入。未指定 `skin` 的动作使用制服。常规换装先播当前着装的 `blink-uniform` 或 `blink-wafuku`，在已呈现的 2.50 秒闭眼帧暂停。目标着装从自己的闭眼帧接入，播到睁眼后进入目标动作。和风版 `afterimage` 自带闭眼收势，播完可直接接制服闭眼帧。点击等交互抢占时加快播至闭眼帧，再接新动作。常驻待机使用制服。
 
 基础动作的加工流程见 [绿幕素材验收](../../docs/green-assets-validation.md)。睡眠按 `sleepstart → doze → wakeup` 接力。运行 `python3 tools/check-electron-media.py AliceButler/electron --sleep-only` 可复核睡眠 RGBA 接缝。
 
