@@ -1,4 +1,4 @@
-export type PlayRequest = { clip: string; kind: string; loop: boolean; token: number; url: string; facing: string; direction: number };
+export type PlayRequest = { tuning: DisplayTuning; clip: string; kind: string; loop: boolean; token: number; url: string; facing: string; direction: number };
 
 // Two bounded slots: the displayed clip and one incoming clip. A frozen canvas
 // covers the 180 ms transition, so the outgoing decoder can be released at once.
@@ -10,6 +10,8 @@ export class Player {
   private fadeTimer = 0;
   private suspended = false;
   private frames = 0;
+  private reportTimer = 0;
+  private reportMs = 0;
   private fading = false;
   private buffering = false;
   private hasPoster = false;
@@ -23,7 +25,6 @@ export class Player {
     private shown: (data: PlayRequest) => void, private frame: () => void) {
     // One reusable CPU image avoids a canvas cache of converted VideoFrames.
     this.posterContext = poster.getContext('2d', { willReadFrequently: true })!;
-    setInterval(() => { if (this.frames) { window.alice.frames(this.frames); this.frames = 0; } }, 1000);
   }
   get video(): HTMLVideoElement | undefined { return this.videos[this.active]; }
   private release(video: HTMLVideoElement): void {
@@ -64,13 +65,17 @@ export class Player {
     video.style.transition = 'none'; video.style.opacity = '1';
   }
   private follow(video: HTMLVideoElement): void {
-    this.frameId = video.requestVideoFrameCallback(() => {
+    this.frameId = video.requestVideoFrameCallback((_now, frame) => {
       if (video !== this.video || this.suspended) return;
       // Reuse one CPU buffer, closing every temporary VideoFrame explicitly.
       if (video.readyState < 2 || video.seeking) this.hold(video);
       else {
         this.refresh(video);
-        if (this.buffering) {
+        // During a native loop seek Chromium can lose HAVE_CURRENT_DATA before
+        // dispatching waiting/seeking. Keep the refreshed poster visible across that seek.
+        if (video.loop && this.request && (video.duration - frame.mediaTime) * 1000 <= this.request.tuning.loopCoverMs)
+          this.hold(video);
+        else if (this.buffering) {
           this.buffering = false; video.style.transition = 'none'; video.style.opacity = '1';
           this.poster.style.opacity = '0'; this.poster.style.zIndex = '1';
         }
@@ -88,6 +93,13 @@ export class Player {
     window.alice.suspended();
   }
   async play(data: PlayRequest): Promise<void> {
+    if (this.reportMs !== data.tuning.frameReportMs) {
+      this.reportMs = data.tuning.frameReportMs;
+      clearInterval(this.reportTimer);
+      this.reportTimer = window.setInterval(() => {
+        if (this.frames) { window.alice.frames(this.frames); this.frames = 0; }
+      }, this.reportMs);
+    }
     this.pending?.abort(); this.pending = undefined;
     if (!this.suspended && this.video?.src === data.url && this.request?.loop && data.loop) {
       this.request = data; this.present(data); return;
@@ -101,7 +113,7 @@ export class Player {
     let timeout = 0, firstFrameId = 0;
     try {
       const firstFrame = new Promise<void>((resolve, reject) => {
-        timeout = window.setTimeout(() => reject(Error('first frame timeout')), 15000);
+        timeout = window.setTimeout(() => reject(Error('first frame timeout')), data.tuning.firstFrameMs);
         signal.addEventListener('abort', () => reject(new DOMException('Superseded', 'AbortError')), { once: true });
         incoming.addEventListener('error', () => reject(Error(incoming.error?.message || 'media decode failed')), { once: true, signal });
         incoming.addEventListener('loadeddata', () => {
@@ -118,7 +130,7 @@ export class Player {
       this.active = this.videos.indexOf(incoming); this.request = data; this.suspended = false;
       this.buffering = false;
       if (previous) this.release(previous);
-      incoming.style.transition = this.reducedMotion.matches || (!previous && this.actor.dataset.suspended !== 'true') ? 'none' : 'opacity 180ms ease-out';
+      incoming.style.transition = this.reducedMotion.matches || (!previous && this.actor.dataset.suspended !== 'true') ? 'none' : `opacity ${data.tuning.fadeMs}ms ease-out`;
       incoming.style.opacity = '1';
       incoming.onended = () => { this.frame(); if (this.request) window.alice.ended(this.request.token); };
       incoming.onwaiting = incoming.onseeking = () => this.hold(incoming);
@@ -130,7 +142,7 @@ export class Player {
       this.fadeTimer = window.setTimeout(() => {
         this.fading = false; this.snapshot(incoming);
         if (!this.buffering) this.poster.style.opacity = '0';
-      }, 190);
+      }, data.tuning.fadeMs + 10);
     } catch (error) {
       if (!signal.aborted) { this.release(incoming); window.alice.videoError(`${data.clip}: ${String(error)}`, data.token); }
     } finally {

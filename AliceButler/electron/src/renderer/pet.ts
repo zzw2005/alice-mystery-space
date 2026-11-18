@@ -14,12 +14,13 @@ function capture(): void {
   if (!video || video.readyState < 2 || !maskDirty) return;
   context.clearRect(0, 0, 640, 360); context.drawImage(video, 0, 0, 640, 360);
   const alpha = context.getImageData(0, 0, 640, 360).data;
-  body = bodyMask(alpha, 640, 360, labels, floodQueue);
+  body = bodyMask(alpha, 640, 360, labels, floodQueue, display.hitAlpha);
   maskDirty = false;
 }
 const player = new Player(videos, document.querySelector<HTMLCanvasElement>('#poster')!, actor, reducedMotion,
   data => { facing = data.facing; direction = data.direction; maskDirty = true; }, () => { maskDirty = true; });
-window.alice.onPlay(data => { void player.play(data); });
+let display: DisplayTuning;
+window.alice.onPlay(data => { display = data.tuning; void player.play(data); });
 window.alice.onSuspend(() => { capture(); player.suspend(); });
 function mirrored(): boolean { return ['moves', 'peek'].includes(actor.dataset.kind ?? '') && ((facing === 'right' && direction < 0) || (facing === 'left' && direction > 0)); }
 window.alice.onPose(pose => {
@@ -54,7 +55,7 @@ const queue: string[] = [];
 function nextBubble(): void {
   const text = queue.shift();
   bubble.hidden = text === undefined;
-  if (text !== undefined) { bubble.textContent = text; setTimeout(nextBubble, 2100); }
+  if (text !== undefined) { bubble.textContent = text; setTimeout(nextBubble, display.bubbleMs); }
 }
 window.alice.onBubble(text => { queue.push(text); if (bubble.hidden) nextBubble(); });
 window.alice.ready('pet');

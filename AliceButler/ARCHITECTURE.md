@@ -37,6 +37,8 @@ Electron 桌宠从 `electron/config.json` 的 `interaction` 读取交互阈值�
 | 受惊 | 接近速度达到 1050 px/s 后 220 ms 内按下并完成单击。滚动 60 s 内限 3 次 |
 | 回来挥手 | 锁屏或最小化超过 600 s，两者都解除后挥手一次。双击也可直接挥手 |
 
+Electron 剩余可调时间、手势阈值、聊天上限及播放参数集中在 `electron/config.json` 的 `tuning`。旧配置缺少的字段从内置默认值补齐。runner、watchdog 读取同目录的 `butler-config.json`，部署工具从源码目录读取其中的 `deployChecks`。逐项默认值、消费位置和生效时间见 [参数清单](../docs/electron-tuning-inventory.md)。
+
 ## 部署源与运行副本
 
 仓库中的 `AliceButler/` 是源码唯一权威；PC 上的同名文件是运行副本，禁止直接改 PC 副本。旧 WinForms/黑底动画目录已删除，当前正式动作位于 `AliceButler/electron/media/`，部署只走 `tools/deploy-pet.sh`。

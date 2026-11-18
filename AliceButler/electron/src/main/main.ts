@@ -21,10 +21,9 @@ const physics = new Physics();
 let pet: BrowserWindow, chat: BrowserWindow | undefined, tray: Tray, director: Director;
 let chatLoading: Promise<void> | undefined, startupMs: number | null = null;
 let suspended = false, lowActivityAt = 0, parkPending = false, hiddenByUser = false;
-const DECODER_RELEASE_MS = 120000;
 let chatReady = false, ready = false, quitting = false, videoReady = false;
 let dragOffset = { x: 0, y: 0 }, downCursor = { x: 0, y: 0 }, downAt = 0, lastMovedAt = 0, moved = false;
-let nextRandom = Date.now() + 50000, lastInteract = Date.now(), clickTimer: NodeJS.Timeout | undefined;
+let nextRandom = Infinity, lastInteract = Date.now(), clickTimer: NodeJS.Timeout | undefined;
 let messages: Message[] = [], presenceNote = '在岗', pending = new Map<string, number>();
 let decodedFrames = 0, lastClipToken = 0, totalFrames = 0;
 let pollRunning = false, statusRunning = false, tickAt = performance.now();
@@ -54,7 +53,7 @@ function savePosition(): void {
   if (lastSaved !== json) { atomicWrite(statePath, json); lastSaved = json; }
 }
 function place(pos: Position | undefined): void {
-  const result = restore(pos, screen.getAllDisplays(), screen.getPrimaryDisplay(), standing);
+  const result = restore(pos, screen.getAllDisplays(), screen.getPrimaryDisplay(), standing, director.config.tuning);
   physics.mode = 'idle'; physics.vx = physics.vy = 0;
   physics.x = result.x; physics.y = result.y;
 }
@@ -75,8 +74,8 @@ function notifyConfig(): void {
   }
 }
 function sendChat(): void {
-  if (chatReady && chat) chat.webContents.send('chat-state', { messages: messages.slice(-200), note: presenceNote,
-    pending: [...pending.entries()].map(([id, at]) => ({ id, stage: Date.now() - at < 2000 ? '已收到' : '思考中' })) });
+  if (chatReady && chat) chat.webContents.send('chat-state', { messages: messages.slice(-director.config.tuning.chatRows), note: presenceNote, tuning: director.config.tuning,
+    pending: [...pending.entries()].map(([id, at]) => ({ id, stage: Date.now() - at < director.config.tuning.pendingThinkMs ? '已收到' : '思考中' })) });
 }
 function play(): void {
   if (!ready) return;
@@ -92,7 +91,7 @@ function play(): void {
   if (suspended && hiddenByUser) return;
   suspended = false; parkPending = false;
   videoReady = false;
-  pet.webContents.send('play', { ...action, token: ++lastClipToken, url: pathToFileURL(path.join(media, clip.file)).href,
+  pet.webContents.send('play', { ...action, tuning: director.config.tuning, token: ++lastClipToken, url: pathToFileURL(path.join(media, clip.file)).href,
     facing: clip.facing ?? 'right', direction: physics.direction });
 }
 function stopWalk(): void { if (physics.mode === 'walk') physics.mode = 'idle'; }
@@ -147,7 +146,7 @@ function menu(): Menu {
     { label: director?.rest === 'awake' ? '睡一会儿' : '起来', click: () => { stopWalk(); if (director.rest === 'awake') director.sleep(); else director.wake(); play(); } },
     { label: '任务栏站立', type: 'checkbox', checked: standing, click: item => setStanding(item.checked) },
     { label: '跳一下', click: () => { stopWalk(); physics.mode = 'air'; physics.vy = -330; physics.vx = 0; } },
-    { label: '回到原位', click: () => { physics.mode = 'idle'; physics.x = area().right - 30; physics.y = area().floor; } },
+    { label: '回到原位', click: () => { physics.mode = 'idle'; physics.x = area().right - director.config.tuning.homeInsetPx; physics.y = area().floor; } },
     { label: pet?.isVisible() ? '隐藏桌宠' : '显示桌宠', click: () => pet.isVisible() ? pet.hide() : pet.showInactive() },
     { label: '回滚上一版', enabled: backups.length > 0, submenu: backups.map(id => ({ label: id, click: () => rollback(id) })) },
     { label: '重载动作配置', click: () => loadConfig().then(play).catch(report) },
@@ -183,6 +182,8 @@ async function loadConfig(): Promise<void> {
   unavailable.clear();
   if (director) { director.config = config; director.base(); }
   else { director = new Director(config); director.base(); }
+  bridge.tuning = config.tuning;
+  if (timers.length) startTimers();
   configStamp = (await fs.stat(configPath).catch(e => { if (e.code === 'ENOENT') return undefined; throw e; }))?.mtimeMs;
 }
 function trusted(sender: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent, which: BrowserWindow | undefined): boolean {
@@ -215,6 +216,7 @@ async function trimPlaybackMemory(): Promise<void> {
 async function setup(): Promise<void> {
   await fs.mkdir(root, { recursive: true });
   await loadConfig();
+  nextRandom = Date.now() + director.config.tuning.firstRandomMs;
   pet = new BrowserWindow({ ...windowOptions(), width: 533, height: 300, transparent: true, hasShadow: false, title: '艾莉丝桌宠' });
   secureWindow(pet);
   pet.on('hide', () => { hiddenByUser = true; });
@@ -251,14 +253,14 @@ async function setup(): Promise<void> {
     }
   });
   ipcMain.on('frame', (event, value: unknown) => {
-    if (trusted(event, pet) && typeof value === 'number' && value > 0 && value <= 240) { decodedFrames += value; totalFrames += value; }
+    if (trusted(event, pet) && typeof value === 'number' && value > 0 && value <= Math.ceil(240 * director.config.tuning.frameReportMs / 1000)) { decodedFrames += value; totalFrames += value; }
   });
   ipcMain.on('video-ready', async (event, token: unknown) => {
     if (!trusted(event, pet) || token !== lastClipToken) return;
     videoReady = true;
     if (startupMs === null) { startupMs = performance.now() - launchAt; if (!testMode) pet.showInactive(); }
     if (director.current.kind === 'moves' && physics.mode === 'idle') {
-      const bounds = area(); physics.targetX = Math.max(bounds.left, Math.min(bounds.right, physics.x + physics.direction * (60 + Math.random() * 220)));
+      const bounds = area(); physics.targetX = Math.max(bounds.left, Math.min(bounds.right, physics.x + physics.direction * (director.config.tuning.walkMinPx + Math.random() * director.config.tuning.walkExtraPx)));
       physics.mode = 'walk';
     }
     try { await fs.rm(path.join(root, 'pet-disabled.flag'), { force: true }); atomicWrite(path.join(root, 'pet-start.log'), `electron video ok ${new Date().toISOString()}\n`); } catch (e) { report(e); }
@@ -291,20 +293,20 @@ async function setup(): Promise<void> {
       if (director.rest !== 'awake') { director.wake(); play(); }
     } else if (type === 'up' && physics.mode === 'drag') {
       lastInteract = now;
-      if (!moved && now - downAt < 400) {
+      if (!moved && now - downAt < director.config.tuning.clickHoldMs) {
         physics.mode = 'idle';
         const startled = approached && gestures.allowStartle(now, director.config.interaction);
         const immediate = startled || pressedPeek;
         if (startled) gesture('startled');
         else if (pressedPeek) reaction('clicks');
-        clickTimer = setTimeout(() => { if (!immediate) reaction('clicks'); toggleChat().catch(report); clickTimer = undefined; }, 260);
+        clickTimer = setTimeout(() => { if (!immediate) reaction('clicks'); toggleChat().catch(report); clickTimer = undefined; }, director.config.tuning.doubleClickMs);
       } else {
-        const edge = snap(physics.x, physics.y, area());
+        const edge = snap(physics.x, physics.y, area(), director.config.tuning);
         if (edge || standing) {
           physics.mode = 'idle'; physics.vx = physics.vy = 0;
           if (edge) { physics.x = edge.x; physics.y = edge.y; }
           if (standing) physics.y = area().floor;
-        } else physics.release(now - lastMovedAt > 150);
+        } else physics.release(now - lastMovedAt > director.config.tuning.releaseStaleMs, director.config.tuning);
         director.base(); play();
       }
     } else if (type === 'double') {
@@ -312,7 +314,7 @@ async function setup(): Promise<void> {
       physics.mode = 'idle'; physics.vx = physics.vy = 0; gesture('wave');
     } else if (type === 'menu') menu().popup({ window: pet });
   });
-  pet.on('blur', () => { if (physics.mode === 'drag') { physics.release(true); director.base(); play(); } });
+  pet.on('blur', () => { if (physics.mode === 'drag') { physics.release(true, director.config.tuning); director.base(); play(); } });
   await pet.loadFile(path.join(ui, 'pet.html'));
   messages = await bridge.history();
   tray = new Tray(nativeImage.createFromPath(path.join(ui, 'avatar.ico')));
@@ -326,18 +328,42 @@ async function setup(): Promise<void> {
     if (saved?.position.display === removed.id) place(undefined);
   });
   screen.on('display-metrics-changed', () => { physics.x = Math.max(area().left, Math.min(area().right, physics.x)); physics.y = Math.min(area().floor, physics.y); });
+  startTimers(); await heartbeat();
+  if (testMode) {
+    Object.assign(globalThis, { aliceTest: {
+      tuning: () => director.config.tuning,
+      menu: () => menu(),
+      state: () => ({ standing, configNotified, action: director.current, token: lastClipToken, rest: director.rest, mode: physics.mode, decodedFrames: totalFrames, videoReady, ignoringMouse, suspended, startupMs, x: physics.x, y: physics.y }),
+      play: (clip: string) => { if (!director.config.clips[clip]) throw Error('Unknown clip'); stopWalk(); director.play(clip, ['idle', 'walk', 'doze', 'dangle'].includes(clip), 'test'); play(); return lastClipToken; },
+      playMove: () => { director.play('walk', true, 'moves'); play(); return lastClipToken; },
+      pose: (direction: number) => { physics.mode = 'idle'; physics.direction = direction; pet.webContents.send('pose', { x: 0, y: 0, squash: 1, direction, heightAbove: 0 }); },
+      sleep: () => { stopWalk(); director.sleep(); play(); },
+      wake: () => { director.wake(); play(); },
+      openChat: ensureChat,
+      park: parkPlayback,
+      resume: play,
+      hide: () => { pet.showInactive(); pet.hide(); },
+      show: () => pet.showInactive(),
+      ageLowActivity: (ms: number) => { lowActivityAt = Date.now() - ms; },
+      stats: writeStats
+    } });
+  }
+}
+function startTimers(): void {
+  timers.splice(0).forEach(clearInterval);
+  const tuning = director.config.tuning;
   timers.push(setInterval(() => {
     const now = performance.now(), dt = (now - tickAt) / 1000; tickAt = now;
     const cursor = screen.getCursorScreenPoint();
     if (physics.mode === 'drag') {
       physics.targetX = cursor.x - dragOffset.x; physics.targetY = cursor.y - dragOffset.y;
-      if (Math.abs(cursor.x - downCursor.x) + Math.abs(cursor.y - downCursor.y) > 4 && !moved) { moved = true; reaction('drag'); }
-      if (Math.abs(physics.targetX - physics.x) + Math.abs(physics.targetY - physics.y) > 4) lastMovedAt = Date.now();
+      if (Math.abs(cursor.x - downCursor.x) + Math.abs(cursor.y - downCursor.y) > tuning.dragDistancePx && !moved) { moved = true; reaction('drag'); }
+      if (Math.abs(physics.targetX - physics.x) + Math.abs(physics.targetY - physics.y) > tuning.dragDistancePx) lastMovedAt = Date.now();
     }
     const oldMode = physics.mode, bounds = area();
     const cfg = director.config.interaction;
     if (physics.mode !== 'walk' || videoReady) {
-      const hardLanding = physics.step(dt, bounds, now, cfg);
+      const hardLanding = physics.step(dt, bounds, now, cfg, tuning);
       if (hardLanding && !standing) gesture('sitdown');
     }
     if (standing && physics.mode !== 'drag') { physics.y = bounds.floor; if (physics.mode === 'air') physics.mode = 'idle'; }
@@ -356,41 +382,23 @@ async function setup(): Promise<void> {
       const next = director.randomAction(); nextRandom = Date.now() + 1000 * (director.config.idleSeconds[0] + Math.random() * (director.config.idleSeconds[1] - director.config.idleSeconds[0]));
       if (next) { physics.direction = Math.random() < .5 ? -1 : 1; play(); }
     }
-    if (Date.now() - lastInteract > 180000 && director.rest === 'awake' && physics.mode === 'idle' && director.presence === 'idle' && !chat?.isVisible()) { director.sleep(); play(); }
-  }, 16));
+    if (Date.now() - lastInteract > tuning.idleSleepMs && director.rest === 'awake' && physics.mode === 'idle' && director.presence === 'idle' && !chat?.isVisible()) { director.sleep(); play(); }
+  }, tuning.tickMs));
   timers.push(setInterval(() => {
     if (physics.mode === 'idle') savePosition();
     const lowActivity = director.rest === 'asleep' || hiddenByUser;
     if (!lowActivity) lowActivityAt = 0;
     else if (!lowActivityAt) lowActivityAt = Date.now();
-    else if (Date.now() - lowActivityAt >= DECODER_RELEASE_MS) parkPlayback();
-  }, 1000));
+    else if (Date.now() - lowActivityAt >= tuning.decoderReleaseMs) parkPlayback();
+  }, tuning.maintenanceMs));
   timers.push(setInterval(() => { if (!pollRunning) { pollRunning = true; bridge.poll().then(replies => {
     for (const reply of replies) { messages.push(reply); pet.webContents.send('bubble', reply.text); pending.delete(reply.id); lastInteract = Date.now(); director.wake(); play(); }
-    for (const [id, at] of pending) if (Date.now() - at > 120000) pending.delete(id);
+    for (const [id, at] of pending) if (Date.now() - at > tuning.replyTimeoutMs) pending.delete(id);
     sendChat();
-  }).catch(report).finally(() => { pollRunning = false; }); } }, 1000));
-  timers.push(setInterval(() => { if (!statusRunning) { statusRunning = true; statusTick().catch(report).finally(() => { statusRunning = false; }); } }, 2000));
-  timers.push(setInterval(() => heartbeat().catch(report), 30000)); await heartbeat();
-  timers.push(setInterval(() => writeStats().catch(report), 60000));
-  if (testMode) {
-    Object.assign(globalThis, { aliceTest: {
-      menu: () => menu(),
-      state: () => ({ standing, configNotified, action: director.current, token: lastClipToken, rest: director.rest, mode: physics.mode, decodedFrames: totalFrames, videoReady, ignoringMouse, suspended, startupMs, x: physics.x, y: physics.y }),
-      play: (clip: string) => { if (!director.config.clips[clip]) throw Error('Unknown clip'); stopWalk(); director.play(clip, ['idle', 'walk', 'doze', 'dangle'].includes(clip), 'test'); play(); return lastClipToken; },
-      playMove: () => { director.play('walk', true, 'moves'); play(); return lastClipToken; },
-      pose: (direction: number) => { physics.mode = 'idle'; physics.direction = direction; pet.webContents.send('pose', { x: 0, y: 0, squash: 1, direction, heightAbove: 0 }); },
-      sleep: () => { stopWalk(); director.sleep(); play(); },
-      wake: () => { director.wake(); play(); },
-      openChat: ensureChat,
-      park: parkPlayback,
-      resume: play,
-      hide: () => { pet.showInactive(); pet.hide(); },
-      show: () => pet.showInactive(),
-      ageLowActivity: (ms: number) => { lowActivityAt = Date.now() - ms; },
-      stats: writeStats
-    } });
-  }
+  }).catch(report).finally(() => { pollRunning = false; }); } }, tuning.replyPollMs));
+  timers.push(setInterval(() => { if (!statusRunning) { statusRunning = true; statusTick().catch(report).finally(() => { statusRunning = false; }); } }, tuning.statusPollMs));
+  timers.push(setInterval(() => heartbeat().catch(report), tuning.heartbeatMs));
+  timers.push(setInterval(() => writeStats().catch(report), tuning.statsMs));
 }
 async function heartbeat(): Promise<void> {
   if (ready && videoReady) atomicWrite(path.join(root, 'pet-heartbeat.txt'), new Date().toISOString());
@@ -400,7 +408,7 @@ async function statusTick(): Promise<void> {
   try {
     const p = JSON.parse((await fs.readFile(path.join(root, 'presence.json'), 'utf8')).replace(/^\uFEFF/, ''));
     const age = Date.now() - Date.parse(p.ts);
-    if (age >= -60000 && age < 720000 && ['idle', 'thinking', 'working', 'result', 'waiting', 'success', 'error'].includes(p.state)) {
+    if (age >= -director.config.tuning.futureToleranceMs && age < director.config.tuning.presenceValidMs && ['idle', 'thinking', 'working', 'result', 'waiting', 'success', 'error'].includes(p.state)) {
       state = p.state;
       const names: Record<Presence, string> = { idle: '在岗', thinking: '思考中', working: '忙碌中', result: '整理中', waiting: '等待中', success: '已完成', error: '出问题了' };
       presenceNote = typeof p.note === 'string' && p.note.trim() ? p.note.slice(0, 200) : names[state];

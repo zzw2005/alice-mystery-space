@@ -5,9 +5,18 @@
 // Job file: jobs/<any>.json =
 //   { id, name, type: "once"|"service", cmd, args: [], cwd, env: {}, shell: bool }
 // Stop a job: drop jobs/stop-<id>.flag
+const config = require("./butler-config.json");
 const fs = require("node:fs");
 const path = require("node:path");
 const { spawn, execFile, execFileSync } = require("node:child_process");
+
+// These settings govern deletion of old receipts, polling and service restarts.
+for (const value of [...Object.values(config.runner), ...config.runnerRespawn.backoffSec,
+  config.runnerRespawn.budgetCount, config.runnerRespawn.budgetWindowMin,
+  config.limits.jobBadFileFails, config.limits.runnerLogFileMB, config.watchThresholds.runnerHeartbeatStaleSec]) {
+  if (!Number.isFinite(value) || value <= 0) throw Error("Invalid runner tuning in butler-config.json");
+}
+if (!config.runnerRespawn.backoffSec.length) throw Error("Empty respawn schedule");
 
 const HOME = __dirname;
 const JOBS = path.join(HOME, "jobs");
@@ -46,7 +55,7 @@ try { grabLock(); } catch (e) {
   if (otherAlive) {
     try {
       const s = JSON.parse(fs.readFileSync(STATUS, "utf8"));
-      heartbeatFresh = s.runnerPid === other && (Date.now() - new Date(s.heartbeat).getTime() < 90000);
+      heartbeatFresh = s.runnerPid === other && (Date.now() - new Date(s.heartbeat).getTime() < config.watchThresholds.runnerHeartbeatStaleSec * 1000);
     } catch (x) {}
   }
   if (otherAlive && heartbeatFresh) { console.error("runner already running: " + other); process.exit(0); }
@@ -60,7 +69,7 @@ function noteBadFile(f, full) {
   // a file still being written by a slow delivery must get its chance
   let ageMs = 0;
   try { ageMs = Date.now() - fs.statSync(full).mtimeMs; } catch (e) {}
-  if (n >= 5 && ageMs > 60000) {
+  if (n >= config.limits.jobBadFileFails && ageMs > config.runner.jobBadAgeMs) {
     badFiles.delete(f);
     try { fs.renameSync(full, full + ".bad"); } catch (e) {}
     event("坏任务文件已隔离：" + f);
@@ -84,7 +93,7 @@ function writeStatus() {
       id: v.job.id, name: v.job.name || v.job.id,
       type: v.job.type || "once", pid: v.pid, startedAt: v.startedAt
     })),
-    events: events.slice(-8),
+    events: events.slice(-config.runner.statusEvents),
     lastEventSeq: eventSeq,
     lastConsumedJobId: lastConsumedJobId
   };
@@ -97,10 +106,10 @@ const EVENTS_LOG = path.join(HOME, "events.jsonl");
 function event(msg) {
   const rec = { seq: ++eventSeq, ts: now(), msg };
   events.push(rec);
-  if (events.length > 30) events.shift();
+  if (events.length > config.runner.memoryEvents) events.shift();
   // append-only audit trail (status.json only keeps the tail); one rotation
   try {
-    if (fs.existsSync(EVENTS_LOG) && fs.statSync(EVENTS_LOG).size > 2 * 1024 * 1024) fs.renameSync(EVENTS_LOG, EVENTS_LOG + ".1");
+    if (fs.existsSync(EVENTS_LOG) && fs.statSync(EVENTS_LOG).size > config.runner.eventLogMiB * 1024 * 1024) fs.renameSync(EVENTS_LOG, EVENTS_LOG + ".1");
     fs.appendFileSync(EVENTS_LOG, JSON.stringify({ runId: startedAt, ...rec }) + "\n");
   } catch (e) {}
   writeStatus();
@@ -128,8 +137,8 @@ function startJob(job, jobFile) {
   });
   const pump = (chunk) => {
     logBytes += chunk.length;
-    if (logBytes <= 20 * 1024 * 1024) { try { logStream.write(chunk); } catch (e) {} }
-    else if (!logCapped) { logCapped = true; try { logStream.write("\n[log truncated at 20MB]\n"); } catch (e) {} }
+    if (logBytes <= config.limits.runnerLogFileMB * 1024 * 1024) { try { logStream.write(chunk); } catch (e) {} }
+    else if (!logCapped) { logCapped = true; try { logStream.write("\n[log truncated at configured limit]\n"); } catch (e) {} }
   };
   child.stdout.on("data", pump);
   child.stderr.on("data", pump);
@@ -152,10 +161,11 @@ function startJob(job, jobFile) {
 function scheduleRespawn(job) {
   const id = job.id;
   const nowMs = Date.now();
-  const arr = (crashLog.get(id) || []).filter(t => nowMs - t < 10 * 60 * 1000);
-  if (arr.length >= 3) { crashLog.set(id, arr); event("服务反复崩溃，已停手：" + (job.name || id)); return; }
+  const arr = (crashLog.get(id) || []).filter(t => nowMs - t < config.runnerRespawn.budgetWindowMin * 60000);
+  if (arr.length >= config.runnerRespawn.budgetCount) { crashLog.set(id, arr); event("服务反复崩溃，已停手：" + (job.name || id)); return; }
   arr.push(nowMs); crashLog.set(id, arr);
-  const delay = [5000, 20000, 60000][Math.min(arr.length - 1, 2)];
+  const backoff = config.runnerRespawn.backoffSec;
+  const delay = 1000 * backoff[Math.min(arr.length - 1, backoff.length - 1)];
   event("服务将自动重启（" + Math.round(delay / 1000) + " 秒后）：" + (job.name || id));
   setTimeout(() => {
     if (live.has(id)) return;
@@ -256,7 +266,7 @@ function scanJobs() {
         rec.stopRequested = true;
         execFile("taskkill", ["/PID", String(rec.pid), "/T", "/F"], (err) => {
           if (err) event("停止失败：" + id);
-          if (rec.adopted) setTimeout(() => { if (live.has(id)) finish(id, null, "stopped"); }, 800);
+          if (rec.adopted) setTimeout(() => { if (live.has(id)) finish(id, null, "stopped"); }, config.runner.stopConfirmMs);
         });
       }
       continue;
@@ -286,7 +296,7 @@ function scanJobs() {
 // Housekeeping: per-id files (done results, logs, stop tombstones) and the
 // crash log would otherwise grow forever, one new id at a time.
 function housekeeping() {
-  const cutoff = Date.now() - 30 * 24 * 3600 * 1000;
+  const cutoff = Date.now() - config.runner.retentionDays * 24 * 3600 * 1000;
   const sweep = (dir, pred) => {
     let files = [];
     try { files = fs.readdirSync(dir); } catch (e) { return; }
@@ -300,7 +310,7 @@ function housekeeping() {
   sweep(LOGS, f => f.endsWith(".log"));
   sweep(RUNNING, f => f.endsWith(".stopped"));
   for (const [cid, arr] of [...crashLog.entries()]) {
-    const kept = arr.filter(t => Date.now() - t < 10 * 60 * 1000);
+    const kept = arr.filter(t => Date.now() - t < config.runnerRespawn.budgetWindowMin * 60000);
     if (!kept.length && !live.has(cid)) crashLog.delete(cid); else crashLog.set(cid, kept);
   }
 }
@@ -308,7 +318,7 @@ function housekeeping() {
 recover();
 writeStatus();
 event("管家已上线");
-setInterval(scanJobs, 1000);
-setInterval(writeStatus, 5000);
-setTimeout(housekeeping, 60000);
-setInterval(housekeeping, 24 * 3600 * 1000);
+setInterval(scanJobs, config.runner.scanMs);
+setInterval(writeStatus, config.runner.heartbeatMs);
+setTimeout(housekeeping, config.runner.initialSweepMs);
+setInterval(housekeeping, config.runner.sweepMs);

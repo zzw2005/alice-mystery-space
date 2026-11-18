@@ -53,7 +53,8 @@ const delay = ms => new Promise(r => setTimeout(r, ms));
       await pet.waitForFunction(t => document.querySelector('#actor').dataset.token === String(t), token);
       return token;
     };
-    for (const clip of Object.keys(require('../config.json').clips)) {
+    const selected = process.env.ALICE_SMOKE_CLIPS?.split(',') || Object.keys(require('../config.json').clips);
+    for (const clip of selected) {
       await play(clip); await delay(250);
       if (['idle', 'walk', 'doze', 'dangle'].includes(clip)) {
         await pet.evaluate(() => {

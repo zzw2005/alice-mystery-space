@@ -1,8 +1,10 @@
+import { defaultTuning, readTuning, Tuning } from './tuning';
 import type { InteractionConfig } from './gestures';
 export type Presence = 'idle' | 'thinking' | 'working' | 'result' | 'waiting' | 'success' | 'error';
 export type Entry = { clip: string; weight: number; loop?: boolean; provisional?: boolean };
 export type Action = { clip: string; loop: boolean; kind: string };
 export interface PetConfig {
+  tuning: Tuning;
   interaction: InteractionConfig;
   animations: {
     idle: Entry[]; turn: Entry[]; drag: Entry[]; clicks: Entry[]; moves: Entry[];
@@ -35,7 +37,7 @@ export function validateConfig(input: unknown): PetConfig {
   }
   for (const key of ['idle', 'turn', 'moves'] as const) if (!Number.isFinite(c.animationWeights[key]) || c.animationWeights[key] <= 0) throw Error('Invalid chain weight');
   if (!Array.isArray(c.idleSeconds) || c.idleSeconds.length !== 2 || c.idleSeconds.some(v => !Number.isFinite(v)) || c.idleSeconds[0] < 10 || c.idleSeconds[1] < c.idleSeconds[0] || c.idleSeconds[1] > 600) throw Error('Invalid idle interval');
-  return c;
+  return { ...c, tuning: readTuning(c.tuning) };
 }
 export class Director {
   rest: 'awake' | 'entering' | 'asleep' | 'waking' = 'awake';
@@ -119,7 +121,7 @@ export class Physics {
   targetX = 0; targetY = 0; direction = 1; squash = 1;
   private peakHeight = 0;
   private impactAt = -1000;
-  step(dt: number, area: { left: number; right: number; top: number; floor: number }, now: number, cfg?: InteractionConfig): boolean {
+  step(dt: number, area: { left: number; right: number; top: number; floor: number }, now: number, cfg?: InteractionConfig, tuning = defaultTuning): boolean {
     let hardLanding = false;
     if (this.mode !== 'air') this.peakHeight = 0;
     dt = Math.min(.05, Math.max(.001, dt));
@@ -147,7 +149,7 @@ export class Physics {
       }
     } else if (this.mode === 'walk') {
       this.direction = this.targetX > this.x ? 1 : -1;
-      const step = 55 * dt;
+      const step = tuning.walkSpeed * dt;
       if (Math.abs(this.targetX - this.x) <= step) { this.x = this.targetX; this.mode = 'idle'; }
       else this.x += this.direction * step;
     }
@@ -156,10 +158,10 @@ export class Physics {
     this.squash = u >= 0 && u < 1 ? 1 - .25 * Math.sin(u * Math.PI) : 1;
     return hardLanding;
   }
-  release(stale: boolean): void {
+  release(stale: boolean, tuning = defaultTuning): void {
     if (stale) this.vx = this.vy = 0;
     const speed = Math.hypot(this.vx, this.vy);
-    if (speed < 500) this.vx = this.vy = 0;
+    if (speed < tuning.throwMinSpeed) this.vx = this.vy = 0;
     else { const scale = 3600 * (1 - Math.exp(-speed / 3600)) / speed; this.vx *= scale; this.vy *= scale; }
     this.mode = 'air';
   }

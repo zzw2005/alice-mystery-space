@@ -32,7 +32,7 @@ const assert = require('node:assert/strict');
       const { bodyMask } = await import('../dist/renderer/hit-mask.js');
       const rgba = new Uint8ClampedArray(10 * 10 * 4), labels = new Int32Array(100), queue = new Int32Array(100);
       for (const p of [0, 44, 45, 54, 55]) rgba[p * 4 + 3] = 255;
-      const body = bodyMask(rgba, 10, 10, labels, queue);
+      const body = bodyMask(rgba, 10, 10, labels, queue, 12);
       return labels[44] === body && labels[55] === body && labels[0] !== body && labels[99] !== body;
     }), true, 'only connected character body can be grabbed');
     const settings = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map(w => ({ visible: w.isVisible(), background: w.getBackgroundColor(), prefs: w.webContents.getLastWebPreferences() })));
@@ -86,7 +86,7 @@ const assert = require('node:assert/strict');
     assert.equal(await chat.locator('#messages img').count(), 0);
     await app.evaluate(({ BrowserWindow }) => {
       const w = BrowserWindow.getAllWindows().find(w => w.webContents.getURL().endsWith('chat.html'));
-      w.webContents.send('chat-state', { messages: [{ id: 'preview1', mine: true, text: '艾莉丝，今天也拜托你啦。' }, { id: 'preview1', mine: false, text: '嗯，我在。有事喊我就好。' }], note: '在岗', pending: [] });
+      w.webContents.send('chat-state', { tuning: global.aliceTest.tuning(), messages: [{ id: 'preview1', mine: true, text: '艾莉丝，今天也拜托你啦。' }, { id: 'preview1', mine: false, text: '嗯，我在。有事喊我就好。' }], note: '在岗', pending: [] });
     });
     await chat.getByText('嗯，我在。有事喊我就好。', { exact: true }).waitFor();
     await new Promise(r => setTimeout(r, 1200));

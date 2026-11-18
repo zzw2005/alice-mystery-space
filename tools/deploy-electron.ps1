@@ -7,6 +7,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $package = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../AliceButler/electron/release/AlicePetNew-win32-x64'))
+$checks = (Get-Content -LiteralPath (Join-Path $PSScriptRoot '../AliceButler/butler-config.json') -Raw | ConvertFrom-Json).deployChecks
 $target = 'C:\ProgramData\AliceButler'
 if (!$ReportPath) { $ReportPath = Join-Path $target 'electron-deploy-result.json' }
 if ($Asset -and !$PSBoundParameters.ContainsKey('ReportPath')) {
@@ -23,7 +24,7 @@ function Stop-Pet {
     & schtasks.exe /end /tn AlicePetLaunch 2>$null | Out-Null
     foreach ($p in @(Get-Process AlicePetNew -ErrorAction SilentlyContinue)) {
         Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
-        $p.WaitForExit(5000) | Out-Null
+        $p.WaitForExit($checks.stopWaitMs) | Out-Null
     }
 }
 $stamp = [DateTime]::UtcNow
@@ -77,8 +78,8 @@ if ($Asset) {
         & schtasks.exe /run /tn AlicePetLaunch
         if ($LASTEXITCODE -ne 0) { throw 'AlicePetLaunch failed' }
         $ready = $false
-        for ($i=0; $i -lt 90; $i++) {
-            Start-Sleep -Milliseconds 500
+        for ($i=0; $i -lt $checks.videoAttempts; $i++) {
+            Start-Sleep -Milliseconds $checks.pollMs
             $start = Join-Path $target 'pet-start.log'; $hb = Join-Path $target 'pet-heartbeat.txt'
             if ((Get-Process AlicePetNew -ErrorAction SilentlyContinue) -and
                 (Test-Path $start) -and (Get-Item $start).LastWriteTimeUtc -ge $stamp -and
@@ -97,8 +98,8 @@ if ($Asset) {
             Start-ScheduledTask -TaskName $task
             $receipt = Join-Path $target "done\$smokeId.result.json"
             $result = $null
-            for ($i=0; $i -lt 60; $i++) {
-                Start-Sleep -Milliseconds 500
+            for ($i=0; $i -lt $checks.receiptAttempts; $i++) {
+                Start-Sleep -Milliseconds $checks.pollMs
                 if (Test-Path $receipt) { $result = Get-Content $receipt -Raw | ConvertFrom-Json; break }
             }
             if ($null -eq $result -or $result.exitCode -ne 0) { throw 'Smoke receipt missing or nonzero' }
@@ -171,8 +172,8 @@ try {
     & schtasks.exe /run /tn AlicePetLaunch
     if ($LASTEXITCODE -ne 0) { throw 'AlicePetLaunch failed' }
     $ready = $false
-    for ($i=0; $i -lt 90; $i++) {
-        Start-Sleep -Milliseconds 500
+    for ($i=0; $i -lt $checks.videoAttempts; $i++) {
+        Start-Sleep -Milliseconds $checks.pollMs
         $start = Join-Path $target 'pet-start.log'; $hb = Join-Path $target 'pet-heartbeat.txt'
         if ((Get-Process AlicePetNew -ErrorAction SilentlyContinue) -and
             (Test-Path $start) -and (Get-Item $start).LastWriteTimeUtc -ge $stamp -and
@@ -191,8 +192,8 @@ try {
         Start-ScheduledTask -TaskName $task
         $receipt = Join-Path $target "done\$smokeId.result.json"
         $result = $null
-        for ($i=0; $i -lt 60; $i++) {
-            Start-Sleep -Milliseconds 500
+        for ($i=0; $i -lt $checks.receiptAttempts; $i++) {
+            Start-Sleep -Milliseconds $checks.pollMs
             if (Test-Path $receipt) { $result = Get-Content $receipt -Raw | ConvertFrom-Json; break }
         }
         if ($null -eq $result -or $result.exitCode -ne 0) { throw 'Smoke receipt missing or nonzero' }
