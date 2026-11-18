@@ -19,7 +19,7 @@
 
 ## outbox/（艾莉丝 → 主人，消费方桌宠）
 
-- 回复必须经 ~/workspace/tools/pet-reply.sh 投递：上传 outbox/.tmp-<id>.json 后 rename 为 reply-<msg-id>.json（{id, text, ts}）。禁止直接 scp 正式名——桌宠每 2 秒轮询，半截文件会被误判损坏。
+- 回复必须经 ~/workspace/tools/pet-reply.sh 投递：上传 outbox/.tmp-<id>.json 后 rename 为 reply-<msg-id>.json（{id, text, ts}）。第三个参数可附带 Electron 动作分类 `animationCategory`，例如 `happy`，由桌宠向当前配置的分类池抽取单次动作。禁止直接 scp 正式名——桌宠每 2 秒轮询，半截文件会被误判损坏。
 - 桌宠消费：先 move 到 outbox/seen/ 成功才显示；seen 已有同名 = 重复投递，直接删源文件不重复显示；解析失败累计 ≥5 次且文件龄 >90 秒才改名 .bad 隔离。
 - 历史回放：桌宠启动时合并 inbox/seen 与 outbox/seen 按 id 回放最近 30 组。
 

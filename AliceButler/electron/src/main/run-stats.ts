@@ -5,7 +5,7 @@ import type { Physics, Director } from './engine';
 type Trigger = { ts: string; source: string; clip: string; state: {
   kind: string; rest: Director['rest']; presence: Director['presence']; motion: Physics['mode']; chatOpen: boolean;
 } };
-type Day = { workingSetPeakMiB: number; privatePeakMiB: number | null; plays: Record<string, number>;
+type Day = { workingSetPeakMiB: number; privatePeakMiB: number | null; plays: Record<string, number>; cancelled?: { superseded: number };
   crashes: number; recoveries: number; chatRoundTripMs: number[]; triggers?: Trigger[] };
 export class RunStats {
   days: Record<string, Day> = {};

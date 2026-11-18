@@ -3,6 +3,7 @@ import type { InteractionConfig } from './gestures';
 export type Presence = 'idle' | 'thinking' | 'working' | 'result' | 'waiting' | 'success' | 'error';
 export type Entry = { clip: string; weight: number; loop?: boolean; provisional?: boolean };
 export type Action = Readonly<{ clip: string; loop: boolean; kind: string; rate: number }>;
+export type Skin = 'uniform' | 'wafuku';
 type WakeSource = 'pointer-wake' | 'chat-open' | 'chat-send' | 'chat-reply' | 'menu-wake';
 type SimpleSource = WakeSource | 'startup' | 'resume' | 'media-fallback' | 'animation-end' | 'placement' |
   'config-reload' | 'hover-exit' | 'drag-release' | 'walk-end' | 'drag' | 'menu-sleep' | 'double-click' |
@@ -10,6 +11,7 @@ type SimpleSource = WakeSource | 'startup' | 'resume' | 'media-fallback' | 'anim
   'long-press';
 export type ActionRequest = { source: SimpleSource } |
   { source: 'presence'; state: Presence; valid: boolean } |
+  { source: 'reply-category'; category: string } |
   { source: 'click'; dismissPeek?: boolean } |
   { source: 'long-press-release'; cancelled?: boolean } |
   { source: 'test'; action: Action | 'sleep' | 'wake' };
@@ -24,7 +26,7 @@ const priority: Record<Source, number> = {
   drag: 4, 'drag-release': 4, 'double-click': 4, 'long-press': 4, 'long-press-release': 4,
   'pointer-wake': 4, 'chat-open': 4, 'chat-send': 4, 'chat-reply': 4, 'menu-wake': 4, 'menu-sleep': 4,
   placement: 4, 'config-reload': 4, 'desktop-return': 4, landing: 4, test: 4,
-  presence: 3, click: 2, 'click-combo': 2, 'click-startle': 2, 'hover-peek': 2, 'hover-exit': 2,
+  click: 3, 'click-combo': 3, 'click-startle': 3, presence: 2, 'reply-category': 2, 'hover-peek': 2, 'hover-exit': 2,
   'walk-end': 1, 'auto-sleep': 1, 'random-chain': 0
 };
 const wakes = new Set<Source>(['pointer-wake', 'chat-open', 'chat-send', 'chat-reply', 'menu-wake']);
@@ -41,12 +43,17 @@ export interface PetConfig {
     idle: Entry[]; turn: Entry[]; drag: Entry[]; clicks: Entry[]; moves: Entry[];
     sleep: { start: Entry[]; loop: Entry[]; end: Entry[] };
     workStatus: Record<Exclude<Presence, 'idle'>, Entry[]>;
+    reactions?: { alert: Entry[]; landing: Entry[] };
+    categories?: Record<string, Entry[]>;
+    events?: { done: Entry[] };
   };
   animationWeights: { idle: number; turn: number; moves: number };
   idleSeconds: [number, number];
-  clips: Record<string, { file: string; facing?: 'left' | 'right'; provisional?: boolean }>;
+  clips: Record<string, { file: string; facing?: 'left' | 'right'; provisional?: boolean; skin?: Skin }>;
+  skinTransition?: { file: string; closedAtSec: number };
 }
 const states = ['thinking', 'working', 'result', 'waiting', 'success', 'error'] as const;
+const chainKinds = ['idle', 'turn', 'moves'] as const;
 export function validateConfig(input: unknown): PetConfig {
   const c = input as PetConfig;
   if (!c || !c.clips || !c.animations || !c.animationWeights) throw Error('Missing animation config');
@@ -57,16 +64,28 @@ export function validateConfig(input: unknown): PetConfig {
   if (!Number.isInteger(c.interaction.startleLimit)) throw Error('Invalid startle limit');
   for (const [id, clip] of Object.entries(c.clips)) {
     if (!/^[a-z][a-z0-9-]*$/.test(id) || !/^[a-z][a-z0-9-]*\.webm$/.test(clip.file)) throw Error('Unsafe clip path');
+    if (clip.skin !== undefined && clip.skin !== 'uniform' && clip.skin !== 'wafuku') throw Error('Invalid clip skin');
   }
-  const pools = [c.animations.idle, c.animations.turn, c.animations.drag, c.animations.clicks, c.animations.moves,
-    c.animations.sleep?.start, c.animations.sleep?.loop, c.animations.sleep?.end,
-    ...states.map(s => c.animations.workStatus?.[s])];
+  const { reactions, categories, events, moves } = c.animations;
+  const pools = [c.animations.idle, c.animations.turn, c.animations.drag, c.animations.clicks,
+    c.animations.sleep?.start, c.animations.sleep?.loop, c.animations.sleep?.end, ...states.map(s => c.animations.workStatus?.[s]),
+    ...(reactions === undefined ? [] : [reactions.alert, reactions.landing]),
+    ...Object.values(categories ?? {}), ...(events === undefined ? [] : [events.done])];
+  if (!Array.isArray(moves)) throw Error('Invalid moves pool');
+  if (moves.length) pools.push(moves);
   for (const pool of pools) {
     if (!Array.isArray(pool) || !pool.length || pool.length > 100) throw Error('Empty or oversized pool');
-    for (const entry of pool) if (!c.clips[entry.clip] || !Number.isFinite(entry.weight) || entry.weight <= 0 || entry.weight > 10000) throw Error('Invalid pool entry');
+    for (const entry of pool) if (!Object.hasOwn(c.clips, entry.clip) || !Number.isFinite(entry.weight) || entry.weight <= 0 || entry.weight > 10000) throw Error('Invalid pool entry');
     if (new Set(pool.map(e => e.clip)).size !== pool.length) throw Error('Duplicate pool clip');
   }
-  for (const key of ['idle', 'turn', 'moves'] as const) if (!Number.isFinite(c.animationWeights[key]) || c.animationWeights[key] <= 0) throw Error('Invalid chain weight');
+  for (const key of chainKinds)
+    if (!Number.isFinite(c.animationWeights[key]) || c.animationWeights[key] < 0 ||
+        (!c.animations[key].length && c.animationWeights[key] > 0)) throw Error('Invalid chain weight');
+  if (c.skinTransition !== undefined) {
+    const { file, closedAtSec } = c.skinTransition;
+    if (!/^[a-z][a-z0-9-]*\.webm$/.test(file) || !Number.isFinite(closedAtSec) || !(closedAtSec >= 2 && closedAtSec < 3))
+      throw Error('Invalid skin transition');
+  }
   if (!Array.isArray(c.idleSeconds) || c.idleSeconds.length !== 2 || c.idleSeconds.some(v => !Number.isFinite(v)) || c.idleSeconds[0] < 10 || c.idleSeconds[1] < c.idleSeconds[0] || c.idleSeconds[1] > 600) throw Error('Invalid idle interval');
   const triggers = readTriggers(c.triggers);
   if (!c.clips.clicktsun) throw Error('Missing interaction clip: clicktsun');
@@ -160,14 +179,22 @@ export class Director {
     if (this.rest === 'asleep') return rejected;
 
     const kind = this.current.kind;
-    if (reactionSources.has(source) && ['long-press', 'drag', 'success', 'error'].includes(kind)) return rejected;
+    if (reactionSources.has(source) && ['long-press', 'drag'].includes(kind)) return rejected;
     switch (request.source) {
       case 'presence':
         if (this.protectedDrag(now) || presenceProtected.has(kind)) return rejected;
         if (request.state === 'success' || request.state === 'error') {
-          return this.commit(action(this.pick(this.config.animations.workStatus[request.state], request.state), false, request.state), source);
+          const pool = (request.state === 'success' && this.config.animations.events?.done) || this.config.animations.workStatus[request.state];
+          return this.commit(action(this.pick(pool, request.state), false, request.state), source);
         }
         return this.commit(this.base(), source);
+      case 'reply-category': {
+        const { categories } = this.config.animations;
+        if (motion !== 'idle' || this.protectedDrag(now) || presenceProtected.has(kind) ||
+            kind === 'clicks' || kind === 'success' || kind === 'error' ||
+            !categories || !Object.hasOwn(categories, request.category)) return rejected;
+        return this.commit(action(this.pick(categories[request.category], request.category), false, 'category'), source);
+      }
       case 'drag': return motion === 'drag' ? this.commit(this.reaction('drag'), source) : rejected;
       case 'long-press':
         return motion === 'drag' && this.holdAt !== undefined && kind !== 'drag' && kind !== 'long-press'
@@ -183,10 +210,10 @@ export class Director {
       case 'click-combo':
         this.last.set('clicks', 'clicktsun');
         return this.commit(action('clicktsun', false, 'clicks'), source);
-      case 'click-startle': return this.commit(action('startled', false, 'startled'), source);
+      case 'click-startle': return this.commit(this.triggerReaction('alert', 'startled'), source);
       case 'hover-peek': return motion === 'idle' && kind === 'idle' ? this.commit(action('peek', false, 'peek'), source) : rejected;
       case 'double-click': return this.commit(action('wave', false, 'wave'), source);
-      case 'landing': return this.commit(action('sitdown', false, 'sitdown'), source);
+      case 'landing': return this.commit(this.triggerReaction('landing', 'sitdown'), source);
       case 'menu-sleep': return this.commit(this.sleep(), source);
       case 'auto-sleep':
         if (motion === 'idle' && !this.protectedDrag(now) && kind !== 'long-press' && kind !== 'drag' &&
@@ -225,6 +252,10 @@ export class Director {
   private reaction(kind: 'clicks' | 'drag' | 'turn' | 'moves'): Action {
     return action(this.pick(this.config.animations[kind], kind), kind === 'drag' || kind === 'moves', kind);
   }
+  private triggerReaction(pool: 'alert' | 'landing', legacyClip: 'startled' | 'sitdown'): Action {
+    const entries = this.config.animations.reactions?.[pool];
+    return action(entries ? this.pick(entries, pool) : legacyClip, false, legacyClip);
+  }
   private inactiveFor(now: number): number { return now - (this.lastInteraction ?? this.startedAt); }
   private randomChain({ now, motion, chatOpen }: Context): Action | undefined {
     if (motion !== 'idle' || this.protectedDrag(now)) return;
@@ -245,18 +276,18 @@ export class Director {
     return selected;
   }
   private drawChain(): Action | undefined {
-    const { animationWeights, triggers } = this.config;
+    const { animations, animationWeights, triggers } = this.config;
+    const once = animations.idle.filter(e => e.loop === false);
     const recentWalk = this.chainRound - this.lastWalkRound < triggers.recentWalkRounds;
-    const pool = Object.entries(animationWeights).map(([clip, weight]) => ({
-      clip, weight: clip === 'moves' && recentWalk ? weight * triggers.recentWalkWeightFactor : weight
-    }));
-    const kind = this.pick(pool, 'chain') as 'idle' | 'turn' | 'moves';
+    const pool = chainKinds.filter(kind => animationWeights[kind] > 0 && (kind === 'idle' ? once : animations[kind]).length)
+      .map(clip => ({
+        clip, weight: animationWeights[clip] * (clip === 'moves' && recentWalk ? triggers.recentWalkWeightFactor : 1)
+      }));
+    if (!pool.length) return;
+    const kind = this.pick(pool, 'chain') as typeof chainKinds[number];
     this.chainRound++;
     if (kind === 'moves') this.lastWalkRound = this.chainRound;
-    if (kind === 'idle') {
-      const once = this.config.animations.idle.filter(e => e.loop === false);
-      return once.length ? action(this.pick(once, 'idle.once'), false, 'idle.once') : undefined;
-    }
+    if (kind === 'idle') return action(this.pick(once, 'idle.once'), false, 'idle.once');
     return this.reaction(kind);
   }
   private sleep(): Action {

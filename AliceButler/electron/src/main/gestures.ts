@@ -15,6 +15,9 @@ export class PointerPress {
   private moved(point: Point, tuning: Tuning): boolean {
     return Math.abs(point.x - this.start.x) + Math.abs(point.y - this.start.y) > tuning.dragDistancePx;
   }
+  isWakeClick(point: Point, now: number, tuning: Tuning): boolean {
+    return this.state === 'wake' && now - this.at < tuning.clickHoldMs && !this.moved(point, tuning);
+  }
   sample(point: Point, now: number, tuning: Tuning, triggers: TriggerConfig): 'drag' | 'long-press' | undefined {
     if (this.state === 'wake' || this.state === 'drag') return;
     if (this.moved(point, tuning)) return this.state = 'drag';

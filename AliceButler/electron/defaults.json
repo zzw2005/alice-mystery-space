@@ -3,10 +3,6 @@
     "idle": {
       "file": "idle.webm"
     },
-    "walk": {
-      "file": "walk.webm",
-      "facing": "right"
-    },
     "wave": {
       "file": "wave.webm"
     },
@@ -40,6 +36,64 @@
     },
     "startled": {
       "file": "startled.webm"
+    },
+    "knock": {
+      "file": "knock.webm"
+    },
+    "coding": {
+      "file": "coding.webm"
+    },
+    "sword": {
+      "file": "sword.webm",
+      "skin": "wafuku"
+    },
+    "hmph": {
+      "file": "hmph.webm"
+    },
+    "guard": {
+      "file": "guard.webm",
+      "skin": "wafuku"
+    },
+    "sweat": {
+      "file": "sweat.webm"
+    },
+    "meat": {
+      "file": "meat.webm"
+    },
+    "stretch": {
+      "file": "stretch.webm"
+    },
+    "laugh": {
+      "file": "laugh.webm"
+    },
+    "sharpen": {
+      "file": "sharpen.webm",
+      "skin": "wafuku"
+    },
+    "ruins": {
+      "file": "ruins.webm",
+      "skin": "wafuku"
+    },
+    "swordweb": {
+      "file": "swordweb.webm",
+      "skin": "wafuku"
+    },
+    "giantslash": {
+      "file": "giantslash.webm",
+      "skin": "wafuku"
+    },
+    "nightwatch": {
+      "file": "nightwatch.webm",
+      "skin": "wafuku"
+    },
+    "rage": {
+      "file": "rage.webm"
+    },
+    "afterimage": {
+      "file": "afterimage.webm"
+    },
+    "rainstand": {
+      "file": "rainstand.webm"
     }
   },
   "animations": {
@@ -51,6 +105,26 @@
       },
       {
         "clip": "wave",
+        "weight": 1,
+        "loop": false
+      },
+      {
+        "clip": "sword",
+        "weight": 1,
+        "loop": false
+      },
+      {
+        "clip": "stretch",
+        "weight": 1,
+        "loop": false
+      },
+      {
+        "clip": "nightwatch",
+        "weight": 1,
+        "loop": false
+      },
+      {
+        "clip": "rainstand",
         "weight": 1,
         "loop": false
       }
@@ -81,14 +155,21 @@
       {
         "clip": "clicktsun",
         "weight": 2
-      }
-    ],
-    "moves": [
+      },
       {
-        "clip": "walk",
+        "clip": "knock",
+        "weight": 1
+      },
+      {
+        "clip": "hmph",
+        "weight": 1
+      },
+      {
+        "clip": "rage",
         "weight": 1
       }
     ],
+    "moves": [],
     "sleep": {
       "start": [
         {
@@ -119,9 +200,8 @@
       ],
       "working": [
         {
-          "clip": "idle",
-          "weight": 1,
-          "provisional": true
+          "clip": "coding",
+          "weight": 1
         }
       ],
       "result": [
@@ -152,12 +232,78 @@
           "provisional": true
         }
       ]
+    },
+    "reactions": {
+      "alert": [
+        {
+          "clip": "startled",
+          "weight": 3
+        },
+        {
+          "clip": "guard",
+          "weight": 1
+        }
+      ],
+      "landing": [
+        {
+          "clip": "sitdown",
+          "weight": 1
+        }
+      ]
+    },
+    "categories": {
+      "work": [
+        {
+          "clip": "coding",
+          "weight": 1
+        },
+        {
+          "clip": "sharpen",
+          "weight": 1
+        }
+      ],
+      "happy": [
+        {
+          "clip": "meat",
+          "weight": 1
+        },
+        {
+          "clip": "laugh",
+          "weight": 1
+        }
+      ],
+      "battle": [
+        {
+          "clip": "ruins",
+          "weight": 1
+        },
+        {
+          "clip": "swordweb",
+          "weight": 1
+        },
+        {
+          "clip": "giantslash",
+          "weight": 1
+        },
+        {
+          "clip": "afterimage",
+          "weight": 1
+        }
+      ]
+    },
+    "events": {
+      "done": [
+        {
+          "clip": "sweat",
+          "weight": 1
+        }
+      ]
     }
   },
   "animationWeights": {
     "idle": 10,
     "turn": 2,
-    "moves": 3
+    "moves": 0
   },
   "idleSeconds": [
     45,
@@ -310,9 +456,13 @@
       "dragTiltSpeed": "达到最大倾角的拖速",
       "dragTiltDegrees": "拖拽最大倾角"
     },
-    "animations": "各动作池由 clip、相对抽取权重 weight、是否循环 loop 构成。",
+    "animations": "各动作池由 clip、相对抽取权重 weight、是否循环 loop 构成。categories 供聊天回复点播，events.done 用于任务成功。",
     "animationWeights": "随机动作大类的相对权重。",
     "idleSeconds": "两次随机动作间的最小和最大秒数。",
-    "clips": "正式素材文件、默认朝向和临时标记。"
+    "clips": "正式素材文件、默认朝向和着装。未指定 skin 的动作使用制服。"
+  },
+  "skinTransition": {
+    "file": "blink-uniform.webm",
+    "closedAtSec": 2.5
   }
 }

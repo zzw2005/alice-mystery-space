@@ -12,8 +12,15 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('app', type=Path)
     parser.add_argument('--audit', type=Path, help='write per-clip body ranges and endpoint measurements')
+    parser.add_argument('--sleep-only', action='store_true', help='measure only the sleep relay and idle loop')
     args = parser.parse_args()
     clips = json.loads((args.app / 'config.json').read_text(encoding='utf8'))['clips']
+    loops = ('idle', 'doze') if args.sleep_only else ('idle', 'walk', 'doze', 'dangle', 'peek')
+    limits = {(name, name): 0 for name in loops if name != 'walk' or name in clips}
+    # Compare with the accepted phase-one RGBA measurements.
+    limits.update({('sleepstart', 'doze'): .132886, ('doze', 'wakeup'): .132886, ('wakeup', 'idle'): 1.316981})
+    if args.sleep_only:
+        clips = {name: clips[name] for pair in limits for name in pair}
     if args.audit:
         pipeline = runpy.run_path(str(Path(__file__).with_name('process-green.py')))
     ends, boxes = {}, {}
@@ -34,16 +41,16 @@ def main():
                 'frames': len(measurements), 'first': measurements[0], 'last': measurements[-1],
                 'ranges': {k: [min(b[k] for b in measurements), max(b[k] for b in measurements)]
                            for k in ('left', 'right', 'top', 'foot', 'height')}}
-    # Compare with decoded phase-one seams. A pose change has no zero-MAE requirement.
-    limits = {(name, name): 0 for name in ('idle', 'walk', 'doze', 'dangle', 'peek')}
-    limits.update({('sleepstart', 'doze'): .132886, ('doze', 'wakeup'): .132886, ('wakeup', 'idle'): 1.316981})
+    failures = []
     for (left, right), limit in limits.items():
         value = mae(ends[left][1], ends[right][0])
         print(f'{left}->{right} MAE={value:.6f} limit={limit:.6f}', flush=True)
         if value > limit:
-            raise ValueError(f'Seam regression: {left}->{right}')
+            failures.append(f'{left}->{right}')
     if args.audit:
         args.audit.write_text(json.dumps(boxes, indent=2) + '\n', encoding='utf8')
+    if failures:
+        raise SystemExit('Seam regression: ' + ', '.join(failures))
 
 
 if __name__ == '__main__':

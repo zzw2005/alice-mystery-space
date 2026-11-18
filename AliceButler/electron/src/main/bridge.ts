@@ -2,7 +2,7 @@ import { defaultTuning } from './tuning';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
-export type Message = { id: string; text: string; mine: boolean; ts?: string };
+export type Message = { id: string; text: string; mine: boolean; ts?: string; animationCategory?: string };
 
 export class ReplyQueue {
   private replies: Message[] = [];
@@ -40,7 +40,7 @@ export class Bridge {
     for (const name of (await fs.readdir(dir)).filter(n => /^reply-[\w-]+\.json$/.test(n)).sort()) {
       const file = path.join(dir, name);
       try {
-        let data: { id: string; text: string; ts?: string };
+        let data: Omit<Message, 'mine'>;
         try {
           if ((await fs.stat(file)).size > this.tuning.maxReplyBytes) throw Error('Oversized reply');
           data = JSON.parse((await fs.readFile(file, 'utf8')).replace(/^\uFEFF/, ''));

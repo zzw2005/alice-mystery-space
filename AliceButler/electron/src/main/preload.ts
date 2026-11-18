@@ -7,6 +7,7 @@ const subscribe = (channel: string, callback: (data: unknown) => void) => {
 contextBridge.exposeInMainWorld('alice', {
   ready: (kind: 'pet' | 'chat') => ipcRenderer.send(kind === 'pet' ? 'renderer-ready' : 'chat-ready'),
   onPlay: (callback: (data: unknown) => void) => subscribe('play', callback),
+  onClickSound: (callback: () => void) => subscribe('click-sound', callback),
   onReclaim: (callback: () => void) => subscribe("reclaim", callback),
   onReclaimDone: (callback: () => void) => subscribe("reclaim-done", callback),
   reclaimed: () => ipcRenderer.send("reclaimed"),
@@ -20,6 +21,7 @@ contextBridge.exposeInMainWorld('alice', {
   hit: (value: boolean) => ipcRenderer.send('hit', value),
   pointer: (kind: string) => ipcRenderer.send('pet-pointer', kind),
   ended: (token: number) => ipcRenderer.send('ended', token),
+  playbackResult: (token: number, outcome: 'cancelled', reason: 'superseded') => ipcRenderer.send('playback-result', token, outcome, reason),
   videoReady: (token: number, started: boolean) => ipcRenderer.send('video-ready', token, started),
   videoError: (text: string, token?: number) => ipcRenderer.send('video-error', text, token),
   frames: (count: number) => ipcRenderer.send('frame', count),

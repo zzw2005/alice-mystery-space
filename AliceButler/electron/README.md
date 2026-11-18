@@ -8,7 +8,7 @@ Node.js 24：`npm ci`（如环境全局禁止安装脚本，再执行 `node node
 
 `npm run package` 输出 `release/AlicePetNew-win32-x64/`，包含 Chromium/Electron，完整安装体积会明显大于旧 WinForms；视频体积与程序体积分别统计，内存按 Electron 所有进程合计。生产不使用 node_modules 或 TS 编译器。
 
-部署后九段生产包点播检查：
+部署后生产包点播检查：
 
 ```powershell
 $env:ALICE_PET_EXECUTABLE = 'C:\ProgramData\AliceButler\AlicePetNew.exe'
@@ -23,17 +23,19 @@ node tests/deployed-nine-clip-smoke.cjs
 
 ## 动作与素材
 
-`config.json` 是运行时动作配置，保存后约 2 秒重载；坏配置保留上一份有效配置并记录错误。idle/turn/drag/clicks/moves 各自权重抽选，多候选排除上次动作。待机池中的 `idle` 标为循环、`wave` 标为单次；三段点击共用 `clicks` 池。`provisional:true` 明确标注借用动作，尚不等于正式对应素材。
+`config.json` 是运行时动作配置，`defaults.json` 是恢复副本。保存后约 2 秒重载。随机链先按 `animationWeights` 抽池，再按池内权重抽动作，有多项时排除上次抽中的动作。当前 `moves` 为空，`walk.webm` 留档。进入工作状态播放 `coding`，任务成功播放 `events.done`。聊天回复可通过 `tools/pet-reply.sh <msg-id> <text> [animation-category]` 选用 `categories` 中的单次动作。点击可抢占在播和待换源的单次动作，回报 `cancelled` / `superseded`。右键和托盘菜单的「点击音效」开关保存在运行根目录的 `pet-settings.json`，音效每 100 ms 最多播放一次。
 
-`media/*.webm` 仅由仓内 `clips-green/v2/*.mp4` 加工。重跑 `py tools/process-green.py --ffmpeg <ffmpeg.exe> --clip <name>`（在仓库根目录），输出 640×360 VP9-alpha、保留源 24fps，不生成视频、不用旧帧。管线依赖 numpy、opencv-python、Pillow，ffmpeg 需要 libvpx-vp9。人物主连通域按站立 17%–85% 高 68%、睡姿 33%–85% 高 52%、中心 51% 固定对齐；Zzz 等分离特效保留但不参与身体包围盒。每帧检测透明通道与不透明纯黑 <5%；`idle`、`walk`、`doze` 使用无损 VP9 并要求解码首尾 RGBA 完全一致。睡眠过渡两段在加工域使用 24 帧接缝锚定、CRF 24 双端关键帧，目标单段约 1MB且三处 MAE <0.5。逐段数据见 `docs/green-assets-validation/<clip>.json` 与总表 `docs/green-assets-validation.md`。
+2026-11-19 批次按 [动作清单](../../new-clips-20261119/actions-manifest-20261119.json) 和 [着装规则](../../SKINS.md) 接入。未指定 `skin` 的动作使用制服。制服转入和风时，在 `blink-uniform` 已呈现的 2.50 秒闭眼帧暂停，目标动作首帧就绪后切源。和风回制服时，从同一闭眼位置播到睁眼并回到基础动作。点击等交互抢占从闭眼帧直接接新动作。和风用于指定动作，常驻待机使用制服。
 
-播放由两个原生 video 按需交替加载，等待 `requestVideoFrameCallback` 确认首帧后再切换；冻结的上一帧 canvas 保留 180ms 交叠，旧 video 立即移除 src 并 load 以释放解码器。额外用固定 RGBA 缓冲＋显式关闭的 VideoFrame 更新一张最近帧 canvas，在循环 seek/waiting 时覆盖视频，等可用新帧恢复后撤下；正常视频仍由原生 video 播放，不用散帧替代。稳定播放只有一个带源 video，加载下一段时至多两个。重复请求相同循环片不会重新加载。睡着或主动隐藏连续超过两分钟后保留静态画面并释放所有视频源，向 Chromium 发送内存压力通知；显示或唤醒时恢复。隐藏期间的状态变化不会重新打开解码器。聊天窗口第一次打开时才创建。
+基础动作的加工流程见 [绿幕素材验收](../../docs/green-assets-validation.md)。睡眠按 `sleepstart → doze → wakeup` 接力。运行 `python3 tools/check-electron-media.py AliceButler/electron --sleep-only` 可复核睡眠 RGBA 接缝。
+
+播放由两个原生 video 按需交替加载，等待 `requestVideoFrameCallback` 确认首帧后再切换；普通切换保留 180ms 淡化，随后移除旧 video 的 src。换源代号 `swapGen` 阻止已被抢占的请求提交。额外用固定 RGBA 缓冲＋显式关闭的 VideoFrame 更新一张最近帧 canvas，在循环 seek/waiting 时覆盖视频，等可用新帧恢复后撤下；正常视频仍由原生 video 播放，不用散帧替代。稳定播放只有一个带源 video，加载下一段时至多两个。重复请求相同循环片不会重新加载。睡着或主动隐藏连续超过两分钟后保留静态画面并释放所有视频源，向 Chromium 发送内存压力通知；显示或唤醒时恢复。隐藏期间的状态变化不会重新打开解码器。聊天窗口第一次打开时才创建。
 
 透明 alpha 读取只用于命中，不把视频改成散帧播放；指针离开窗口或拖拽期间跳过像素读取与连通域计算。透明区与脚下阴影穿透；角色可抓。DIP 坐标跟随 Electron DPI，镜像/挤压使用同一逆变换命中。拖拽使用解析临界阻尼弹簧，慢帧下也不发生数值发散。
 
 ## 优化验收（只在开发副本运行）
 
-`npm test` 检查类型、动作/物理与文件桥；`npm run test:electron` 验证九段、透明通道、睡眠与聊天回归；`npm run test:playback` 验证切换、快速抢占、画面连续性、解码器释放和恢复。全部使用隔离 `ALICE_PET_ROOT`。测试额外指定独立 user-data-dir，避免与生产或另一开发实例竞争单实例锁。测试环境如需 `ALICE_TEST_NO_SANDBOX=1`，仅测试启动器会带 `--no-sandbox`，产品启动不改变沙盒。
+`npm test` 检查类型、动作/物理与文件桥；`npm run test:electron` 验证已配置动作、透明通道、睡眠与聊天回归；`npm run test:playback` 验证切换、快速抢占、画面连续性、解码器释放和恢复。全部使用隔离 `ALICE_PET_ROOT`。测试额外指定独立 user-data-dir，避免与生产或另一开发实例竞争单实例锁。测试环境如需 `ALICE_TEST_NO_SANDBOX=1`，仅测试启动器会带 `--no-sandbox`，产品启动不改变沙盒。
 
 `ALICE_PLAYBACK_SOAK=1 npm run test:playback` 等待真实两分钟睡眠阈值；默认通过老化测试时间戳验证同一个维护定时器。隐藏路径也测试同一阈值与恢复。测试采样 actor 的 160×90 合成画面来检测黑帧/透明空帧，不代替 Windows 上的可见画面验收。
 

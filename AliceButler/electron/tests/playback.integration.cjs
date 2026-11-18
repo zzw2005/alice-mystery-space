@@ -67,7 +67,7 @@ const delay = ms => new Promise(r => setTimeout(r, ms));
     }
     // Supersede pending loads and fades; the last request alone must win.
     const token = await app.evaluate(() => {
-      for (let i = 0; i < 30; i++) global.aliceTest.play(['walk', 'doze', 'idle', 'clickhappy'][i % 4]);
+      for (let i = 0; i < 30; i++) global.aliceTest.play(['dangle', 'doze', 'idle', 'clickhappy'][i % 4]);
       return global.aliceTest.play('idle');
     });
     await pet.waitForFunction(t => document.querySelector('#actor').dataset.token === String(t), token);

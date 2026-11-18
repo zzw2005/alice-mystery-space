@@ -22,6 +22,11 @@ const player = new Player(videos, document.querySelector<HTMLCanvasElement>('#po
   data => { facing = data.facing; direction = data.direction; maskDirty = true; }, () => { maskDirty = true; });
 let display: DisplayTuning;
 window.alice.onPlay(data => { display = data.tuning; void player.play(data); });
+const clickSound = new Audio('../media/click-duck.wav');
+window.alice.onClickSound(() => {
+  clickSound.currentTime = 0;
+  void clickSound.play().catch(() => {});
+});
 window.alice.onSuspend(() => { capture(); player.suspend(); });
 function mirrored(): boolean { return ['moves', 'peek'].includes(actor.dataset.kind ?? '') && ((facing === 'right' && direction < 0) || (facing === 'left' && direction > 0)); }
 window.alice.onPose(pose => {

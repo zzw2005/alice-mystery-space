@@ -72,7 +72,7 @@ test('third confirmed single below 600 ms forces clicktsun and resets, including
   const d = new Director(config, () => ticket);
   const click = now => play(d, g.singleClick(now, config.triggers) ? 'click-combo' : 'click').clip;
   assert.equal(click(0), 'clickhappy');
-  ticket = .99;
+  ticket = .5;
   assert.equal(click(599), 'clicktsun');
   assert.equal(click(1198), 'clicktsun', 'combo has priority over the same-pool exclusion');
   ticket = 0;

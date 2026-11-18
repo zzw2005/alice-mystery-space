@@ -241,7 +241,9 @@ async function recordFrames(pet, length) {
 
 async function timing() {
   const results = {};
-  for (const label of ['24', '30', 'walk', 'drag']) {
+  const labels = ['24', '30', 'drag'];
+  if (require('../config.json').animations.moves.length) labels.push('walk');
+  for (const label of labels) {
     await withPet(1, async (app, pet) => {
       await app.evaluate(({ BrowserWindow }) => {
         const window = BrowserWindow.getAllWindows()[0];

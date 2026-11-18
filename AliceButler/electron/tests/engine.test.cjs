@@ -53,7 +53,12 @@ test('interactive cooldown blocks all chain draws until 60 seconds have elapsed'
 });
 test('moves weight halves during the two draws after a walk, then returns to full weight', () => {
   let ticket = .99;
-  const d = new Director({ ...config, idleSeconds: [45, 45] }, () => ticket, 0);
+  const legacy = structuredClone(config);
+  legacy.clips.walk = { file: 'walk.webm' };
+  legacy.animations.moves = [{ clip: 'walk', weight: 1 }];
+  legacy.animationWeights.moves = 3;
+  legacy.idleSeconds = [45, 45];
+  const d = new Director(validateConfig(legacy), () => ticket, 0);
   play(d, 'startup');
   assert.equal(auto(d, 50000, true).kind, 'moves');
   play(d, 'walk-end'); ticket = .9;
@@ -136,24 +141,26 @@ test('waiting draws at double interval while thinking, working and result never 
   assert.equal(play(d, 'animation-end').kind, 'work');
   assert.equal(auto(d, 189999, false), null);
   assert.equal(auto(d, 190000, false).kind, 'turn');
-  for (const state of ['success', 'error']) {
-    assert.deepEqual(presence(d, state), { clip: 'wave', loop: false, kind: state, rate: 1 });
+  for (const [state, clip] of [['success', 'sweat'], ['error', 'wave']]) {
+    assert.deepEqual(presence(d, state), { clip, loop: false, kind: state, rate: 1 });
     play(d, 'animation-end');
     assert.equal(auto(d, 300000, false), null);
   }
 });
-test('three click responses are one-shot and never repeat consecutively', () => {
-  const values = [0, .2, .7, .1, .9, .4, .8, .3];
-  let index = 0;
-  const d = new Director(config, () => values[index++ % values.length]);
+test('six click responses are one-shot and never repeat consecutively', () => {
+  let ticket = 0;
+  const d = new Director(config, () => ticket);
   let previous = '';
-  for (let i = 0; i < 40; i++) {
+  const selected = new Set();
+  for (let i = 0; i < 101; i++) {
+    ticket = (i * 37 % 101) / 101;
     const action = play(d, 'click');
     assert.equal(action.loop, false);
     assert.notEqual(action.clip, previous);
-    assert.match(action.clip, /^click(?:happy|shy|tsun)$/);
+    selected.add(action.clip);
     previous = action.clip;
   }
+  assert.deepEqual(selected, new Set(config.animations.clicks.map(entry => entry.clip)));
 });
 test('sleep enters, loops, wakes; a wake during entry waits for the sleeping pose', () => {
   const d = new Director(config); play(d, 'startup'); play(d, 'menu-sleep');
@@ -195,17 +202,19 @@ test('drag reaches 95% in 150 ms at fast, normal and delayed tick rates without 
   }
 });
 
-test('same-tick arbitration: direct > presence > click > random; wave plays once per edge', () => {
+test('same-tick arbitration: direct > click > presence > random; clicks supersede active presence one-shots', () => {
   const d = new Director(config, () => 0, 0);
   play(d, 'startup');
   const random = { source: 'random-chain' }, click = { source: 'click' };
   const success = { source: 'presence', state: 'success', valid: true };
   const error = { ...success, state: 'error' };
-  const [lostRandom, lostClick, wonPresence] = d.request([random, click, success], context(50000));
+  const [lostRandom, wonClick, lostSuccess] = d.request([random, click, success], context(50000));
   assert.equal(lostRandom.outcome, 'rejected');
-  assert.equal(lostClick.outcome, 'rejected');
-  assert.deepEqual(wonPresence, { outcome: 'played', source: 'presence', action: { clip: 'wave', loop: false, kind: 'success', rate: 1 } });
-  assert.equal(d.request([click], context(50016))[0].outcome, 'rejected', 'an active success wave takes precedence over a single click');
+  assert.equal(lostSuccess.outcome, 'rejected');
+  assert.equal(wonClick.action.clip, 'clickhappy');
+  presence(d, 'idle', 50016);
+  assert.equal(presence(d, 'success', 50032).clip, 'sweat');
+  assert.equal(d.request([click], context(50048))[0].outcome, 'played');
   play(d, 'animation-end');
   assert.equal(d.request([success], context(60000))[0].outcome, 'rejected');
   const [lostPresence, wonDirect] = d.request([error, { source: 'double-click' }], context(60000));
@@ -215,11 +224,26 @@ test('same-tick arbitration: direct > presence > click > random; wave plays once
   assert.equal(d.presence, 'error');
   play(d, 'animation-end');
   presence(d, 'idle', 60001);
-  const [lostChain, wonClick] = d.request([random, click], context(70000));
+  const [lostChain, wonLaterClick] = d.request([random, click], context(70000));
   assert.equal(lostChain.outcome, 'rejected');
-  assert.equal(wonClick.source, 'click');
+  assert.equal(wonLaterClick.source, 'click');
   assert.equal(presence(d, 'working', 71000).kind, 'work');
   assert.equal(play(d, 'click', 71001).kind, 'clicks', 'work loop allows a later click');
+});
+
+test('manifest routes work, replies, alert and landing without a production move', () => {
+  const d = new Director(validateConfig(config), () => .99, 0);
+  play(d, 'startup');
+  assert.equal(auto(d, 50000, true).kind, 'turn');
+  play(d, 'animation-end');
+  assert.equal(auto(d, 150000, true).kind, 'idle.once');
+  assert.equal(presence(d, 'working', 150001).clip, 'coding');
+  for (const [category, clip] of [['work', 'sharpen'], ['happy', 'laugh'], ['battle', 'afterimage']]) {
+    assert.equal(d.request([{ source: 'reply-category', category }], context())[0].action.clip, clip);
+  }
+  assert.equal(d.request([{ source: 'reply-category', category: 'constructor' }], context())[0].outcome, 'rejected');
+  assert.equal(play(d, 'click-startle').clip, 'guard');
+  assert.equal(play(d, 'landing').clip, 'sitdown');
 });
 
 test('sleep relay rejects each interrupt source and queues one wake during entry', () => {

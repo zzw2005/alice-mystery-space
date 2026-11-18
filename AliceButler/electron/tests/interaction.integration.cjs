@@ -61,7 +61,7 @@ async function startSample(pet, seek) {
     const videos = [...document.querySelectorAll('video')];
     const poster = document.querySelector('#poster');
     const active = () => videos.find(video => video.style.opacity === '1' && video.hasAttribute('src'));
-    const sample = { running: true, frames: 0, bad: 0, wrapped: false, lastTime: undefined, tail: undefined, head: undefined };
+    const sample = { running: true, frames: 0, bad: 0, badFrames: [], wrapped: false, lastTime: undefined, tail: undefined, head: undefined };
     window.transitionSample = sample;
     const check = () => {
       if (!sample.running) return;
@@ -81,7 +81,11 @@ async function startSample(pet, seek) {
         if (pixels[i + 3] > 250 && pixels[i] < 5 && pixels[i + 1] < 5 && pixels[i + 2] < 5) black++;
       }
       sample.frames++;
-      if (opaque < 500 || black >= .05 * 160 * 90) sample.bad++;
+      if (opaque < 500 || black >= .05 * 160 * 90) {
+        sample.bad++;
+        if (sample.badFrames.length < 8) sample.badFrames.push({ opaque, black, poster: getComputedStyle(poster).opacity,
+          videos: videos.map(v => [v.src.split('/').at(-1), v.currentTime, v.readyState, getComputedStyle(v).opacity]) });
+      }
       const video = active();
       if (seek && video) {
         if (!sample.wrapped && video.currentTime > video.duration - .2 && opaque >= 500) sample.tail = c.toDataURL();
@@ -98,7 +102,7 @@ async function startSample(pet, seek) {
 async function stopSample(pet) {
   const sample = await pet.evaluate(() => { window.transitionSample.running = false; return window.transitionSample; });
   assert.ok(sample.frames > 0);
-  assert.equal(sample.bad, 0, JSON.stringify({ frames: sample.frames, bad: sample.bad }));
+  assert.equal(sample.bad, 0, JSON.stringify({ frames: sample.frames, bad: sample.bad, samples: sample.badFrames }));
   return sample;
 }
 function videoRate(pet) {
@@ -107,6 +111,90 @@ function videoRate(pet) {
     return { rate: video.playbackRate, loop: video.loop };
   });
 }
+
+test('Electron closes eyes for wardrobe changes and a real click supersedes the pending action', async t => {
+  await withPet(t, async ({ app, pet, root, stats }) => {
+    await app.evaluate(({ BrowserWindow, screen }) => {
+      screen.getCursorScreenPoint = () => ({ x: 100, y: 100 });
+      BrowserWindow.getAllWindows()[0].showInactive();
+    });
+    await pet.evaluate(() => {
+      const active = () => [...document.querySelectorAll('video')].find(v => v.style.opacity === '1' && v.hasAttribute('src'));
+      window.activeVideo = active;
+      window.closedFrames = [];
+      window.blinkStarts = [];
+      let displayingBlink = false;
+      const observeBlink = new MutationObserver(() => {
+        const video = active();
+        const nextIsBlink = !!video?.src.endsWith('/blink-uniform.webm');
+        if (nextIsBlink && !displayingBlink) window.blinkStarts.push(video.currentTime);
+        displayingBlink = nextIsBlink;
+      });
+      for (const video of document.querySelectorAll('video')) observeBlink.observe(video, { attributeFilter: ['style'] });
+      const pause = HTMLMediaElement.prototype.pause;
+      HTMLMediaElement.prototype.pause = function () {
+        if (this.src.endsWith('/blink-uniform.webm') && !this.paused) window.closedFrames.push(this.currentTime);
+        return pause.call(this);
+      };
+      const play = HTMLMediaElement.prototype.play;
+      window.duckPlays = [];
+      HTMLMediaElement.prototype.play = function () {
+        const result = play.call(this);
+        if (this.src.endsWith('/click-duck.wav')) result.then(() => window.duckPlays.push(performance.now()), () => {});
+        return result;
+      };
+    });
+    await startSample(pet, false);
+    await app.evaluate(() => global.aliceTest.play('sword'));
+    await pet.waitForFunction(() => window.activeVideo()?.src.endsWith('/blink-uniform.webm'));
+    await waitClip(pet, 'sword');
+    const closedAt = await pet.evaluate(() => window.closedFrames[0]);
+    assert.ok(closedAt >= 2 && closedAt < 3, `closed frame at ${closedAt}s`);
+    await pet.evaluate(() => { const v = window.activeVideo(); v.currentTime = v.duration - .05; });
+    const returnAt = await (await pet.waitForFunction(() => window.blinkStarts[1])).jsonValue();
+    assert.ok(returnAt >= 2 && returnAt < 3, `return frame at ${returnAt}s`);
+    await waitClip(pet, 'idle', 'idle');
+
+    await app.evaluate(() => global.aliceTest.play('sword'));
+    await pet.waitForFunction(() => window.activeVideo()?.src.endsWith('/blink-uniform.webm'));
+    await pet.evaluate(() => {
+      for (let i = 0; i < 2; i++) { window.alice.pointer('down'); window.alice.pointer('up'); }
+    });
+    await pet.waitForFunction(() => window.duckPlays.length === 1);
+    await delay(120);
+    await pointer(pet, 'down');
+    await pointer(pet, 'up');
+    await pet.waitForFunction(() => window.duckPlays.length === 2);
+    await pet.waitForFunction(() => document.querySelector('#actor').dataset.kind === 'clicks', null, { timeout: 2000 });
+    const counts = Object.values((await stats()).days).map(day => day.cancelled?.superseded ?? 0);
+    assert.equal(counts.at(-1), 1);
+    await stopSample(pet);
+
+    await app.evaluate(() => global.aliceTest.menu().items.find(i => i.label === '点击音效').click());
+    assert.deepEqual(JSON.parse(await fs.readFile(path.join(root, 'pet-settings.json'), 'utf8')), { clickSoundEnabled: false });
+    await app.evaluate(() => global.aliceTest.play('sword'));
+    await waitClip(pet, 'sword');
+    const beforeActiveCancel = Object.values((await stats()).days).at(-1).cancelled.superseded;
+    await pointer(pet, 'down');
+    await pointer(pet, 'up');
+    await pet.waitForFunction(() => document.querySelector('#actor').dataset.kind === 'clicks', null, { timeout: 2000 });
+    assert.equal(await pet.evaluate(() => window.duckPlays.length), 2);
+    assert.equal(Object.values((await stats()).days).at(-1).cancelled.superseded, beforeActiveCancel + 1);
+
+    const outbox = path.join(root, 'outbox');
+    await fs.mkdir(outbox, { recursive: true });
+    await app.evaluate(() => global.aliceTest.play('idle'));
+    await waitClip(pet, 'idle', 'test');
+    const reply = path.join(outbox, 'reply-animation-category.json');
+    await fs.writeFile(reply + '.tmp', JSON.stringify({ text: '测试开心动作', animationCategory: 'happy' }));
+    await fs.rename(reply + '.tmp', reply);
+    await pet.waitForFunction(() => {
+      const { kind, clip } = document.querySelector('#actor').dataset;
+      return kind === 'category' && ['laugh', 'meat'].includes(clip);
+    });
+    t.diagnostic(`blink closed at ${closedAt.toFixed(3)}s, returned at ${returnAt.toFixed(3)}s`);
+  });
+});
 
 test('Electron long press holds and loops, releases without chat or throw, and converts to drag', async t => {
   await withPet(t, async ({ app, pet, root, state, triggers }) => {
@@ -223,8 +311,8 @@ test('Electron missing, malformed and invalid presence uses idle without changin
       () => presenceFile(root, 'made-up'), () => fs.writeFile(file, 'null')]) {
       await presenceFile(root, 'working');
       await waitFor(async () => (await state()).presence === 'working');
-      const token = await app.evaluate(() => global.aliceTest.play('walk'));
-      await waitClip(pet, 'walk', 'test');
+      const token = await app.evaluate(() => global.aliceTest.play('dangle'));
+      await waitClip(pet, 'dangle', 'test');
       await invalid();
       await waitFor(async () => (await state()).presence === 'idle');
       assert.equal((await state()).token, token);

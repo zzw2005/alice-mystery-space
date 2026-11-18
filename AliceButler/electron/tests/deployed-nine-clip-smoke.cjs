@@ -32,8 +32,9 @@ async function smoke({ executable, source, clips: requested, checkUi = false }) 
     const appPath = await app.evaluate(({ app }) => app.getAppPath());
     const config = JSON.parse(await fs.readFile(path.join(appPath, 'config.json'), 'utf8'));
     const selected = requested || Object.keys(config.clips);
-    if (checkUi && !requested && (selected.length !== 13 || Object.keys(require('../config.json').clips).some(id => !config.clips[id])))
-      throw Error('Expected all thirteen registered clips');
+    const expected = Object.keys(require('../config.json').clips);
+    if (checkUi && !requested && (selected.length !== expected.length || expected.some(id => !config.clips[id])))
+      throw Error('Expected all registered clips');
     for (const clip of selected) {
       if (!config.clips[clip]) throw new Error(`Unknown smoke clip: ${clip}`);
     }

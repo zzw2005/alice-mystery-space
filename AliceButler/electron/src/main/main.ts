@@ -58,6 +58,9 @@ function report(operation: string, error?: unknown): void {
   fs.appendFile(path.join(root, 'pet-error.log'), `${new Date().toISOString()} ${message}\n`).catch(() => {});
 }
 const statePath = path.join(root, 'pet-position.json');
+const settingsPath = path.join(root, 'pet-settings.json');
+const clickSoundIntervalMs = 100;
+let clickSoundEnabled = true, lastClickSoundAt = -Infinity;
 let standing = false, desktop: Position, lastSaved = '';
 const gestures = new Gestures(), absence = new Absence();
 let approached = false;
@@ -118,10 +121,13 @@ function dispatch(requests: readonly ActionRequest[], now = Date.now()): void {
     // Keep a hidden pet parked; waking a visible sleeping pet resumes immediately.
     if (suspended && hiddenByUser) return;
     const clip = director.config.clips[action.clip];
+    const transition = director.config.skinTransition;
     suspended = false; parkPending = false;
     videoReady = false;
     pet.webContents.send('play', { ...action, tuning: director.config.tuning, token: ++lastClipToken, url: pathToFileURL(path.join(media, clip.file)).href,
-      facing: clip.facing ?? 'right', direction: physics.direction });
+      facing: clip.facing ?? 'right', direction: physics.direction, skin: clip.skin ?? 'uniform',
+      blink: transition && { url: pathToFileURL(path.join(media, transition.file)).href, closedAtSec: transition.closedAtSec },
+      interactive: ['click', 'click-combo', 'click-startle', 'double-click', 'drag', 'long-press', 'landing'].includes(source) });
   }
 }
 function stopWalk(): void { if (physics.mode === 'walk') physics.mode = 'idle'; }
@@ -142,6 +148,7 @@ function deliverReplies(): void {
   if (sentAt !== undefined) { runStats.today().chatRoundTripMs.push(now - sentAt); persistStats(); }
   pending.delete(next.id);
   interact({ source: 'chat-reply' }, now);
+  if (typeof next.animationCategory === 'string') actionRequests.push({ source: 'reply-category', category: next.animationCategory });
   sendChat();
   deliverReplies();
 }
@@ -160,8 +167,16 @@ function finishPress(cursor: Electron.Point, now: number, cancelled: boolean): v
   clearTimeout(pressTimer);
   director.endHold();
   if (!held) return;
-  const release = held.release(cursor, now, director.config.tuning);
+  const { tuning } = director.config;
+  const release = held.release(cursor, now, tuning);
   doubleAllowed = release === 'click' && !cancelled;
+  if (clickSoundEnabled && !cancelled && (release === 'click' || held.isWakeClick(cursor, now, tuning))) {
+    const soundAt = performance.now();
+    if (soundAt - lastClickSoundAt >= clickSoundIntervalMs) {
+      lastClickSoundAt = soundAt;
+      pet.webContents.send('click-sound');
+    }
+  }
   if (release === 'wake') { gestures.resetClicks(); return; }
   director.interact(now);
   if (release !== 'click' || cancelled) gestures.resetClicks();
@@ -243,6 +258,13 @@ function menu(): Menu {
       interact({ source: director.rest === 'awake' ? 'menu-sleep' : 'menu-wake' });
     } },
     { label: '任务栏站立', type: 'checkbox', checked: standing, click: item => setStanding(item.checked) },
+    { label: '点击音效', type: 'checkbox', checked: clickSoundEnabled, click: item => {
+      try {
+        atomicWrite(settingsPath, JSON.stringify({ clickSoundEnabled: item.checked }));
+        clickSoundEnabled = item.checked;
+      } catch (error) { report('settings-write', error); }
+      tray.setContextMenu(menu());
+    } },
     { label: '跳一下', click: () => { finishPress(screen.getCursorScreenPoint(), Date.now(), true); physics.mode = 'air'; physics.vy = -330; physics.vx = 0; } },
     { label: '回到原位', click: () => { finishPress(screen.getCursorScreenPoint(), Date.now(), true); physics.mode = 'idle'; physics.x = area().right - director.config.tuning.homeInsetPx; physics.y = area().floor; } },
     { label: pet?.isVisible() ? '隐藏桌宠' : '显示桌宠', click: () => pet.isVisible() ? pet.hide() : pet.showInactive() },
@@ -320,6 +342,8 @@ async function trimPlaybackMemory(highWater = false): Promise<void> {
 }
 async function setup(): Promise<void> {
   await fs.mkdir(root, { recursive: true });
+  try { clickSoundEnabled = (await optionalJson('pet-settings.json'))?.clickSoundEnabled !== false; }
+  catch (error) { report('settings-read', error); }
   runStats = new RunStats(statsPath);
   await loadConfig();
   pet = new BrowserWindow({ ...windowOptions(), ...petSize, transparent: true, hasShadow: false, title: '艾莉丝桌宠' });
@@ -399,9 +423,15 @@ async function setup(): Promise<void> {
   });
   ipcMain.on('video-error', (event, message: unknown, token?: number) => {
     if (!trusted(event, pet)) return;
-    const reason = message === 'poster' || message === 'first-frame' ? message : 'decode';
+    const reason = message === 'poster' || message === 'first-frame' || message === 'skin-transition' ? message : 'decode';
     report('video-' + reason);
     if (token === lastClipToken) dispatch([{ source: 'media-fallback' }]);
+  });
+  ipcMain.on('playback-result', (event, token: unknown, outcome: unknown, reason: unknown) => {
+    if (!trusted(event, pet) || typeof token !== 'number' || !Number.isSafeInteger(token) ||
+        token <= 0 || token >= lastClipToken || outcome !== 'cancelled' || reason !== 'superseded') return;
+    const counts = runStats.today().cancelled ??= { superseded: 0 };
+    counts.superseded++;
   });
   ipcMain.on('ended', (event, token: unknown) => {
     if (!trusted(event, pet) || token !== lastClipToken) return;
@@ -465,7 +495,13 @@ async function setup(): Promise<void> {
         dispatch([{ source: 'test', action: { clip, loop: ['idle', 'walk', 'doze', 'dangle'].includes(clip), kind: 'test', rate: 1 } }]);
         return lastClipToken;
       },
-      playMove: () => { dispatch([{ source: 'test', action: { clip: 'walk', loop: true, kind: 'moves', rate: 1 } }]); return lastClipToken; },
+      playMove: () => {
+        const move = director.config.animations.moves[0];
+        if (!move) throw Error('No configured move');
+        dispatch([{ source: 'test', action: { clip: move.clip, loop: true, kind: 'moves', rate: 1 } }]);
+        return lastClipToken;
+      },
+      playPeek: () => { dispatch([{ source: 'test', action: { clip: 'peek', loop: false, kind: 'peek', rate: 1 } }]); return lastClipToken; },
       pose: (direction: number) => { physics.mode = 'idle'; physics.direction = direction; pet.webContents.send('pose', { x: 0, y: 0, squash: 1, direction, heightAbove: 0 }); },
       sleep: () => dispatch([{ source: 'test', action: 'sleep' }]),
       wake: () => dispatch([{ source: 'test', action: 'wake' }]),
