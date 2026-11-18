@@ -1,3 +1,5 @@
+import type { TriggerConfig } from './tuning';
+
 export interface InteractionConfig {
   hoverMs: number; peekCooldownMs: number; gazeSpeed: number;
   approachSpeed: number; approachWindowMs: number; startleLimit: number; startleWindowMs: number;
@@ -12,6 +14,8 @@ export class Gestures {
   private usedVisit = false;
   private lastPeek = -Infinity;
   private startles: number[] = [];
+  private lastClickAt = -Infinity;
+  private clickCount = 0;
   direction = 1;
 
   leave(): void { this.enteredAt = undefined; this.usedVisit = false; }
@@ -44,6 +48,15 @@ export class Gestures {
     if (this.startles.length >= cfg.startleLimit) return false;
     this.startles.push(now); return true;
   }
+  singleClick(now: number, cfg: TriggerConfig): boolean {
+    if (!cfg.clickComboEnabled) { this.resetClicks(); return false; }
+    this.clickCount = now - this.lastClickAt < cfg.clickComboGapMs ? this.clickCount + 1 : 1;
+    this.lastClickAt = now;
+    if (this.clickCount < cfg.clickComboCount) return false;
+    this.resetClicks();
+    return true;
+  }
+  resetClicks(): void { this.lastClickAt = -Infinity; this.clickCount = 0; }
 }
 export class Absence {
   private reasons = new Set<string>();

@@ -47,4 +47,8 @@ node tests/deployed-nine-clip-smoke.cjs
 
 presence 文件每 2 秒读取，12 分钟过期。thinking/working/result/waiting 循环；success/error 每次进入仅一次。睡眠期间不受 presence 打断，提前叫醒先完成入睡段再播醒来段。heartbeat 每 30 秒；托盘主动退出写 pet-disabled.flag；自启沿用 AlicePetLaunch。
 
+waiting 档按加倍间隔参与随机链。自动入睡要求聊天窗关闭且 presence 为 idle。互动冷却、困意、唤醒保护和连点彩蛋由两份 JSON 的 `triggers` 控制，默认值见 [参数清单](../../docs/electron-tuning-inventory.md#第五批触发参数)。
+
+动作切换以 `ts`、`source`、`clip` 和 `state` 记录在 `pet-stats.json` 的 `days[UTC 日期].triggers`。每个事件独立于 `plays` 的播放启动计数。`node AliceButler/pet-weekly.js <运行目录>` 按最近七个 UTC 自然日输出触发来源分布。
+
 生产部署只能执行仓库 `tools/deploy-pet.sh`，需要打包结果。管家、看门狗、计划任务和既有 ACL 保持不变。以新的 video 启动日志、heartbeat、runner 的 done 冒烟回执 exitCode=0 为成功标准。

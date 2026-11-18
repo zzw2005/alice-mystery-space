@@ -18,8 +18,8 @@ Electron 以 `AliceButler/electron/config.json` 为准，`defaults.json` 保存�
 | `tuning.reclaimCooldownMs` | 60000 | 水位回收冷却间隔 | main/main.ts |
 | `tuning.statsMs` | 60000 | 性能记录间隔 | main/main.ts |
 | `tuning.decoderReleaseMs` | 120000 | 低活跃后释放解码器的等待时间 | main/main.ts |
-| `tuning.idleSleepMs` | 180000 | 无交互进入睡眠的等待时间 | main/main.ts |
-| `tuning.firstRandomMs` | 50000 | 启动至首次随机动作的等待时间 | main/main.ts |
+| `tuning.idleSleepMs` | 180000 | 无交互进入睡眠的等待时间 | main/engine.ts |
+| `tuning.firstRandomMs` | 50000 | 启动至首次随机动作的基准等待时间 | main/engine.ts |
 | `tuning.pendingThinkMs` | 2000 | 已收到切到思考中的等待时间 | main/main.ts |
 | `tuning.replyTimeoutMs` | 120000 | 待回复状态过期时间 | main/main.ts |
 | `tuning.presenceValidMs` | 720000 | 在岗状态有效期 | main/main.ts |
@@ -61,9 +61,29 @@ Electron 以 `AliceButler/electron/config.json` 为准，`defaults.json` 保存�
 | `interaction.dragTiltSpeed` | 1200 | 达到最大倾角的拖速 | main/main.ts、renderer/pet.ts |
 | `interaction.dragTiltDegrees` | 7 | 拖拽最大倾角 | main/main.ts、renderer/pet.ts |
 
+## 第五批触发参数
+
+下表参数同时位于 `AliceButler/electron/config.json` 和 `AliceButler/electron/defaults.json`。毫秒值以 `Ms` 结尾。
+
+| 参数 | 默认值 | 作用 | 消费文件 |
+|---|---:|---|---|
+| `triggers.interactionCooldownMs` | 60000 | 互动后暂停随机链的时长 | main/engine.ts |
+| `triggers.recentWalkRounds` | 2 | 一次走路后降低 moves 权重的随机抽取轮数 | main/engine.ts |
+| `triggers.recentWalkWeightFactor` | 0.5 | 近期走路时的 moves 权重系数 | main/engine.ts |
+| `triggers.drowsyAfterMs` | 120000 | 闲置进入困意阶段的等待时间 | main/engine.ts |
+| `triggers.drowsyIntervalFactor` | 2 | 困意阶段的随机链间隔系数 | main/engine.ts |
+| `triggers.wakeProtectionMs` | 30000 | 唤醒动作结束后的自动入睡保护时长 | main/engine.ts |
+| `triggers.clickComboEnabled` | true | 启用连点彩蛋 | main/gestures.ts |
+| `triggers.clickComboGapMs` | 600 | 两次确认单击之间的间隔上界，上界不计入 | main/gestures.ts |
+| `triggers.clickComboCount` | 3 | 触发彩蛋所需的连续单击数 | main/gestures.ts |
+| `triggers.dragProtectionMs` | 2000 | 按住后屏蔽随机链与在岗动作切换的等待时间 | main/engine.ts |
+| `triggers.waitingIntervalFactor` | 2 | 等待档的随机链间隔系数 | main/engine.ts |
+
+困意和 waiting 的间隔系数用于当前待抽的随机间隔，从上一轮实际抽取时起算。困意要求聊天窗关闭且处于 idle，waiting 使用自己的系数。休眠须同时满足 `tuning.idleSleepMs` 和唤醒保护条件。
+
 ## 已有动作权重与间隔
 
-参数仍由 `main/engine.ts` 的 Director 与 `main/main.ts` 的随机动作定时器读取。clip、facing、loop 和 provisional 分别表示素材标识、原始朝向、循环属性、临时标记。
+参数由 `main/engine.ts` 的 Director 读取。clip、facing、loop 和 provisional 分别表示素材标识、原始朝向、循环属性、临时标记。
 
 | 参数 | 现值 | 作用 |
 |---|---|---|
@@ -121,4 +141,4 @@ Electron 以 `AliceButler/electron/config.json` 为准，`defaults.json` 保存�
 
 固定画布 640×360、窗口几何、85% 脚位、协议文件名和 IPC 消息格式属于接口或校准值。弹簧、重力、碰撞恢复、数值积分步长与抛掷饱和系数按改版纪律保留在物理实现。输入校验上限、备份菜单的三项契约、平台托盘长度限制、诊断输出行数和测试超时不作为运行时调参项。
 
-本批新配置键共 52 个：Electron 37 个，管家 10 个，看护 1 个，部署检查 4 个。另有上表 9 个原有管家键接到实际消费点。interaction 原有 12 项和既有动作权重未计入新增。
+第三批登记了 52 个新增配置键，其中 Electron 37 个、管家 10 个、看护 1 个、部署检查 4 个。第五批新增 11 个 Electron 触发参数。

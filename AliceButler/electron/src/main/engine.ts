@@ -1,4 +1,4 @@
-import { defaultTuning, readTuning, Tuning } from './tuning';
+import { defaultTuning, readTriggers, readTuning, TriggerConfig, Tuning } from './tuning';
 import type { InteractionConfig } from './gestures';
 export type Presence = 'idle' | 'thinking' | 'working' | 'result' | 'waiting' | 'success' | 'error';
 export type Entry = { clip: string; weight: number; loop?: boolean; provisional?: boolean };
@@ -6,6 +6,7 @@ export type Action = { clip: string; loop: boolean; kind: string };
 export interface PetConfig {
   tuning: Tuning;
   interaction: InteractionConfig;
+  triggers: TriggerConfig;
   animations: {
     idle: Entry[]; turn: Entry[]; drag: Entry[]; clicks: Entry[]; moves: Entry[];
     sleep: { start: Entry[]; loop: Entry[]; end: Entry[] };
@@ -37,7 +38,9 @@ export function validateConfig(input: unknown): PetConfig {
   }
   for (const key of ['idle', 'turn', 'moves'] as const) if (!Number.isFinite(c.animationWeights[key]) || c.animationWeights[key] <= 0) throw Error('Invalid chain weight');
   if (!Array.isArray(c.idleSeconds) || c.idleSeconds.length !== 2 || c.idleSeconds.some(v => !Number.isFinite(v)) || c.idleSeconds[0] < 10 || c.idleSeconds[1] < c.idleSeconds[0] || c.idleSeconds[1] > 600) throw Error('Invalid idle interval');
-  return { ...c, tuning: readTuning(c.tuning) };
+  const triggers = readTriggers(c.triggers);
+  if (triggers.clickComboEnabled && !c.clips.clicktsun) throw Error('Missing click combo clip: clicktsun');
+  return { ...c, tuning: readTuning(c.tuning), triggers };
 }
 export class Director {
   rest: 'awake' | 'entering' | 'asleep' | 'waking' = 'awake';
@@ -45,7 +48,17 @@ export class Director {
   current: Action = { clip: '', loop: true, kind: 'idle' };
   queue: Action[] = [];
   private last = new Map<string, string>();
-  constructor(public config: PetConfig, private random = Math.random) {}
+  private lastInteraction?: number;
+  private holdAt?: number;
+  private wakeEndedAt = -Infinity;
+  private lastChainAt: number;
+  private chainInterval: number;
+  private chainRound = 0;
+  private lastWalkRound = -Infinity;
+  constructor(public config: PetConfig, private random = Math.random, private startedAt = Date.now()) {
+    this.lastChainAt = startedAt;
+    this.chainInterval = config.tuning.firstRandomMs;
+  }
   pickEntry(pool: Entry[], key: string): Entry {
     const candidates = pool.length > 1 ? pool.filter(e => e.clip !== this.last.get(key)) : pool;
     let ticket = this.random() * candidates.reduce((n, e) => n + e.weight, 0);
@@ -72,10 +85,49 @@ export class Director {
     else if (this.rest !== 'awake') { this.wake(); return this.current; }
     return this.play(this.pick(this.config.animations[kind], kind), kind === 'drag' || kind === 'moves', kind);
   }
-  randomAction(): Action | null {
-    if (this.rest !== 'awake' || this.presence !== 'idle' || !['idle', 'turn'].includes(this.current.kind)) return null;
-    const pool = Object.entries(this.config.animationWeights).map(([clip, weight]) => ({ clip, weight }));
+  click(combo: boolean): Action | null {
+    if (!combo || this.rest !== 'awake') return this.react('clicks');
+    this.last.set('clicks', 'clicktsun');
+    return this.play('clicktsun', false, 'clicks');
+  }
+  interact(now: number): void { this.lastInteraction = now; }
+  beginHold(now: number): void { this.holdAt = now; }
+  endHold(): void { this.holdAt = undefined; }
+  private protectedDrag(now: number): boolean {
+    return this.holdAt !== undefined && now - this.holdAt >= this.config.triggers.dragProtectionMs;
+  }
+  automaticAction(now: number, chatOpen: boolean): Action | null {
+    if (this.rest !== 'awake' || this.protectedDrag(now) || this.current.kind === 'drag') return null;
+    const { triggers, tuning, idleSeconds } = this.config;
+    const inactiveFor = now - (this.lastInteraction ?? this.startedAt);
+    const canDoze = this.presence === 'idle' && !chatOpen;
+    if (canDoze && inactiveFor >= tuning.idleSleepMs && now - this.wakeEndedAt >= triggers.wakeProtectionMs)
+      return this.sleep();
+
+    const waiting = this.presence === 'waiting';
+    if (this.presence !== 'idle' && !waiting) return null;
+    if (this.lastInteraction !== undefined && inactiveFor < triggers.interactionCooldownMs) return null;
+    const { kind } = this.current;
+    if (kind !== 'idle' && kind !== 'turn' && !(waiting && kind === 'work')) return null;
+    const intervalFactor = waiting ? triggers.waitingIntervalFactor :
+      canDoze && inactiveFor >= triggers.drowsyAfterMs ? triggers.drowsyIntervalFactor : 1;
+    if (now - this.lastChainAt < this.chainInterval * intervalFactor) return null;
+
+    const action = this.drawChain();
+    this.lastChainAt = now;
+    const [min, max] = idleSeconds;
+    this.chainInterval = 1000 * (min + this.random() * (max - min));
+    return action;
+  }
+  private drawChain(): Action | null {
+    const { animationWeights, triggers } = this.config;
+    const recentWalk = this.chainRound - this.lastWalkRound < triggers.recentWalkRounds;
+    const pool = Object.entries(animationWeights).map(([clip, weight]) => ({
+      clip, weight: clip === 'moves' && recentWalk ? weight * triggers.recentWalkWeightFactor : weight
+    }));
     const kind = this.pick(pool, 'chain') as 'idle' | 'turn' | 'moves';
+    this.chainRound++;
+    if (kind === 'moves') this.lastWalkRound = this.chainRound;
     if (kind === 'idle') {
       const once = this.config.animations.idle.filter(e => e.loop === false);
       return once.length ? this.play(this.pick(once, 'idle.once'), false, 'idle.once') : null;
@@ -94,21 +146,21 @@ export class Director {
     return this.play(this.pick(this.config.animations.sleep.end, 'sleep.end'), false, 'sleep.end');
   }
   private wakePending = false;
-  setPresence(state: Presence): Action {
+  setPresence(state: Presence, now = Date.now()): Action {
     if (state === this.presence) return this.current;
     this.presence = state;
-    if (this.rest !== 'awake' || ['drag', 'sitdown', 'startled', 'peek', 'wave'].includes(this.current.kind)) return this.current;
+    if (this.rest !== 'awake' || this.protectedDrag(now) || ['drag', 'sitdown', 'startled', 'peek', 'wave'].includes(this.current.kind)) return this.current;
     if (state === 'success' || state === 'error') return this.play(this.pick(this.config.animations.workStatus[state], state), false, state);
     return this.base();
   }
-  ended(): Action {
+  ended(now = Date.now()): Action {
     if (this.current.loop) return this.current;
     if (this.current.kind === 'sleep.start') {
       this.rest = 'asleep';
       if (this.wakePending) { this.wakePending = false; return this.wake(); }
       return this.base();
     }
-    if (this.current.kind === 'sleep.end') this.rest = 'awake';
+    if (this.current.kind === 'sleep.end') { this.rest = 'awake'; this.wakeEndedAt = now; }
     if (['sitdown', 'peek', 'startled', 'wave'].includes(this.current.kind)) return this.play('idle', true, 'idle');
     const queued = this.queue.shift();
     return queued ? this.current = queued : this.base();

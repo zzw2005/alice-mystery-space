@@ -1,8 +1,12 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import type { Physics, Director } from './engine';
 
+type Trigger = { ts: string; source: string; clip: string; state: {
+  kind: string; rest: Director['rest']; presence: Director['presence']; motion: Physics['mode']; chatOpen: boolean;
+} };
 type Day = { workingSetPeakMiB: number; privatePeakMiB: number | null; plays: Record<string, number>;
-  crashes: number; recoveries: number; chatRoundTripMs: number[] };
+  crashes: number; recoveries: number; chatRoundTripMs: number[]; triggers?: Trigger[] };
 export class RunStats {
   days: Record<string, Day> = {};
   recoveryPending = false;
@@ -29,5 +33,9 @@ export class RunStats {
     const day = this.today();
     day.workingSetPeakMiB = Math.max(day.workingSetPeakMiB, workingSet);
     if (privateMiB !== null) day.privatePeakMiB = Math.max(day.privatePeakMiB ?? 0, privateMiB);
+  }
+  recordTrigger(source: string, clip: string, state: Trigger['state'], now = new Date()): void {
+    const day = this.today(now);
+    (day.triggers ??= []).push({ ts: now.toISOString(), source, clip, state });
   }
 }

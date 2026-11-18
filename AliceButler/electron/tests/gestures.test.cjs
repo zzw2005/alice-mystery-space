@@ -57,3 +57,32 @@ test('one-shots return to idle and dragging supersedes any one-shot immediately'
     d.gesture(clip); assert.deepEqual(d.react('drag'), { clip: 'dangle', loop: true, kind: 'drag' });
   }
 });
+
+test('third confirmed single below 600 ms forces clicktsun and resets, including after a previous clicktsun', () => {
+  const g = new Gestures();
+  let ticket = 0;
+  const d = new Director(config, () => ticket);
+  const click = now => d.click(g.singleClick(now, config.triggers)).clip;
+  assert.equal(click(0), 'clickhappy');
+  ticket = .99;
+  assert.equal(click(599), 'clicktsun');
+  assert.equal(click(1198), 'clicktsun', 'combo has priority over the same-pool exclusion');
+  ticket = 0;
+  assert.equal(click(1700), 'clickhappy');
+  assert.equal(click(2300), 'clickshy', 'an exact 600 ms gap starts a fresh sequence');
+  assert.equal(click(2800), 'clickhappy');
+  assert.equal(click(3300), 'clicktsun');
+});
+
+test('disabling the combo restores weighted picks and a double-click clears a partial streak', () => {
+  const g = new Gestures(), d = new Director(config, () => 0);
+  const disabled = { ...config.triggers, clickComboEnabled: false };
+  const clips = [0, 300, 600].map(now => d.click(g.singleClick(now, disabled)).clip);
+  assert.deepEqual(clips, ['clickhappy', 'clickshy', 'clickhappy']);
+  const click = now => g.singleClick(now, config.triggers);
+  assert.equal(click(900), false);
+  assert.equal(click(1200), false);
+  g.resetClicks();
+  assert.deepEqual(d.gesture('wave'), { clip: 'wave', loop: false, kind: 'wave' });
+  assert.equal(click(1500), false);
+});

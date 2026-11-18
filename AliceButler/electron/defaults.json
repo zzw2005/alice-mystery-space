@@ -177,6 +177,19 @@
     "dragTiltSpeed": 1200,
     "dragTiltDegrees": 7
   },
+  "triggers": {
+    "interactionCooldownMs": 60000,
+    "recentWalkRounds": 2,
+    "recentWalkWeightFactor": 0.5,
+    "drowsyAfterMs": 120000,
+    "drowsyIntervalFactor": 2,
+    "wakeProtectionMs": 30000,
+    "clickComboEnabled": true,
+    "clickComboGapMs": 600,
+    "clickComboCount": 3,
+    "dragProtectionMs": 2000,
+    "waitingIntervalFactor": 2
+  },
   "tuning": {
     "tickMs": 16,
     "maintenanceMs": 1000,
@@ -220,6 +233,19 @@
     "reclaimCooldownMs": 60000
   },
   "_notes": {
+    "triggers": {
+      "interactionCooldownMs": "互动后的随机链冷却时长",
+      "recentWalkRounds": "步行后降低 moves 权重的随机抽取轮数",
+      "recentWalkWeightFactor": "近期走路时的 moves 权重系数",
+      "drowsyAfterMs": "无互动进入困意阶段的等待时间",
+      "drowsyIntervalFactor": "困意阶段的随机链间隔系数",
+      "wakeProtectionMs": "唤醒动作播完后的自动入睡保护时长",
+      "clickComboEnabled": "是否启用单击连点彩蛋",
+      "clickComboGapMs": "相邻单击的间隔上界（不含）",
+      "clickComboCount": "触发彩蛋所需的连续单击数",
+      "dragProtectionMs": "按住后阻止随机链和在岗动作打断的等待时间",
+      "waitingIntervalFactor": "等待档的随机链间隔系数"
+    },
     "tuning": {
       "tickMs": "物理与命中采样间隔",
       "maintenanceMs": "位置保存与低活跃检查间隔",

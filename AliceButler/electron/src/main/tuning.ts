@@ -54,3 +54,35 @@ export function readTuning(input: unknown): Tuning {
   if (tuning.bubbleMs < 2000) throw Error('Bubbles must stay visible for at least two seconds');
   return tuning;
 }
+
+export interface TriggerConfig {
+  interactionCooldownMs: number;
+  recentWalkRounds: number;
+  recentWalkWeightFactor: number;
+  drowsyAfterMs: number;
+  drowsyIntervalFactor: number;
+  wakeProtectionMs: number;
+  clickComboEnabled: boolean;
+  clickComboGapMs: number;
+  clickComboCount: number;
+  dragProtectionMs: number;
+  waitingIntervalFactor: number;
+}
+
+const defaultTriggers: TriggerConfig = require('../../defaults.json').triggers;
+
+export function readTriggers(input: unknown): TriggerConfig {
+  if (input !== undefined && (!input || typeof input !== 'object' || Array.isArray(input))) throw Error('Invalid triggers section');
+  const triggers = { ...defaultTriggers, ...input as Partial<TriggerConfig> };
+  for (const key of ['interactionCooldownMs', 'recentWalkRounds', 'drowsyAfterMs', 'wakeProtectionMs',
+    'clickComboGapMs', 'clickComboCount', 'dragProtectionMs'] as const) {
+    if (!Number.isSafeInteger(triggers[key]) || triggers[key] <= 0) throw Error('Invalid trigger parameter: ' + key);
+  }
+  for (const key of ['drowsyIntervalFactor', 'waitingIntervalFactor'] as const) {
+    if (!Number.isFinite(triggers[key]) || triggers[key] < 1) throw Error('Invalid trigger parameter: ' + key);
+  }
+  if (!Number.isFinite(triggers.recentWalkWeightFactor) || triggers.recentWalkWeightFactor <= 0 || triggers.recentWalkWeightFactor > 1)
+    throw Error('Invalid recent walk weight factor');
+  if (typeof triggers.clickComboEnabled !== 'boolean') throw Error('Invalid click combo switch');
+  return triggers;
+}
