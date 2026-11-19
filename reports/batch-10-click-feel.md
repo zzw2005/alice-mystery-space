@@ -42,3 +42,7 @@
 ## 部署
 
 Windows x64 包由 `npm run package` 生成，`tools/deploy-pet.sh --verify-only` 校验通过，共 87 个文件和 368,510,900 字节。正式部署以新进程的启动日志、心跳和 runner 回执 `exitCode=0` 为验收依据。
+
+2026-11-19 14:22 JST 将 `b729e45` 部署到生产机。新进程的 video 启动日志和心跳已回读，`AlicePetLaunch` 为运行中。runner 回执为 `deploysmoke-1f40ad6572f04740a18555f9351754df.result.json`，`exitCode=0`。回滚备份目录为 `deploy-backups/20261119052240-307dd664`。
+
+生产包的两份配置和三份相关播放器文件与打包产物哈希一致。以隔离运行根目录验证现场安装包，`idle`、六段点击反应和 `doze` 共 8 段透明点播通过，页面异常为 0。生产机原先关闭了「特效」总开关，部署后从桌宠菜单重新开启并回读了设置。实际氛围仍为 `off`，动作粒子开关已开启。
