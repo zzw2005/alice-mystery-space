@@ -47,17 +47,9 @@
     "coding": {
       "file": "coding.webm"
     },
-    "sword": {
-      "file": "sword.webm",
-      "skin": "wafuku"
-    },
     "hmph": {
       "file": "hmph.webm",
       "startOffset": 3.125
-    },
-    "guard": {
-      "file": "guard.webm",
-      "skin": "wafuku"
     },
     "sweat": {
       "file": "sweat.webm"
@@ -71,34 +63,9 @@
     "laugh": {
       "file": "laugh.webm"
     },
-    "sharpen": {
-      "file": "sharpen.webm",
-      "skin": "wafuku"
-    },
-    "ruins": {
-      "file": "ruins.webm",
-      "skin": "wafuku"
-    },
-    "swordweb": {
-      "file": "swordweb.webm",
-      "skin": "wafuku"
-    },
-    "giantslash": {
-      "file": "giantslash.webm",
-      "skin": "wafuku"
-    },
-    "nightwatch": {
-      "file": "nightwatch.webm",
-      "skin": "wafuku"
-    },
     "rage": {
       "file": "rage.webm",
       "startOffset": 1.25
-    },
-    "afterimage": {
-      "file": "afterimage.webm",
-      "skin": "wafuku",
-      "endsClosed": true
     },
     "rainstand": {
       "file": "rainstand.webm"
@@ -117,17 +84,7 @@
         "loop": false
       },
       {
-        "clip": "sword",
-        "weight": 1,
-        "loop": false
-      },
-      {
         "clip": "stretch",
-        "weight": 1,
-        "loop": false
-      },
-      {
-        "clip": "nightwatch",
         "weight": 1,
         "loop": false
       },
@@ -246,10 +203,6 @@
         {
           "clip": "startled",
           "weight": 3
-        },
-        {
-          "clip": "guard",
-          "weight": 1
         }
       ],
       "landing": [
@@ -264,10 +217,6 @@
         {
           "clip": "coding",
           "weight": 1
-        },
-        {
-          "clip": "sharpen",
-          "weight": 1
         }
       ],
       "happy": [
@@ -277,24 +226,6 @@
         },
         {
           "clip": "laugh",
-          "weight": 1
-        }
-      ],
-      "battle": [
-        {
-          "clip": "ruins",
-          "weight": 1
-        },
-        {
-          "clip": "swordweb",
-          "weight": 1
-        },
-        {
-          "clip": "giantslash",
-          "weight": 1
-        },
-        {
-          "clip": "afterimage",
           "weight": 1
         }
       ]
@@ -468,16 +399,6 @@
     "animationWeights": "随机动作大类的相对权重。",
     "idleSeconds": "两次随机动作间的最小和最大秒数。",
     "clips": "正式素材文件、默认朝向和着装。未指定 skin 的动作使用制服。"
-  },
-  "skinTransition": {
-    "uniform": {
-      "file": "blink-uniform.webm",
-      "closedAtSec": 2.5
-    },
-    "wafuku": {
-      "file": "blink-wafuku.webm",
-      "closedAtSec": 2.5
-    }
   },
   "effects": {
     "atmosphere": "off",

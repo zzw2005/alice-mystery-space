@@ -32,19 +32,19 @@ test('manual selection plays configured one-shots and respects sleep, drag and m
   const d = new Director(validateConfig(config), () => 0, 0);
   const select = (clip, motion) => d.request([{ source: 'menu-action', clip }], context(0, motion))[0];
   play(d, 'startup');
-  assert.equal(d.manualClips.length, 24);
+  assert.equal(d.manualClips.length, 16);
   assert.equal(new Set(d.manualClips).size, d.manualClips.length);
-  for (const clip of ['idle', 'dangle', 'doze', 'sleepstart', 'wakeup', 'blink-wafuku', 'unknown'])
+  for (const clip of ['idle', 'dangle', 'doze', 'sleepstart', 'wakeup', 'blink-wafuku', 'sword', 'unknown'])
     assert.equal(select(clip).outcome, 'rejected', clip);
-  assert.equal(select('sword', 'drag').outcome, 'rejected');
-  assert.deepEqual(select('sword').action, { clip: 'sword', loop: false, kind: 'manual', rate: 1 });
+  assert.equal(select('laugh', 'drag').outcome, 'rejected');
+  assert.deepEqual(select('laugh').action, { clip: 'laugh', loop: false, kind: 'manual', rate: 1 });
   assert.equal(play(d, 'auto-sleep', config.tuning.idleSleepMs + 1), null);
   assert.equal(presence(d, 'working'), null, 'work status does not interrupt manual playback');
   assert.equal(play(d, 'animation-end').clip, 'coding');
-  select('sword');
+  select('laugh');
   play(d, 'media-fallback');
-  assert.equal(select('sword').outcome, 'rejected');
-  assert.ok(!d.manualClips.includes('sword'));
+  assert.equal(select('laugh').outcome, 'rejected');
+  assert.ok(!d.manualClips.includes('laugh'));
 
   play(d, 'menu-sleep');
   assert.equal(select('wave').outcome, 'rejected');
@@ -63,14 +63,14 @@ test('config validates all referenced clips and rejects unsafe paths/weights', (
   broken.clips.idle.file = 'idle.webm'; broken.animations.idle[0].weight = NaN;
   assert.throws(() => validateConfig(broken));
 });
-test('config validates both wardrobe blinks and accepts the original uniform-only format', () => {
-  const { uniform, wafuku } = config.skinTransition;
-  assert.equal(validateConfig(config).skinTransition.wafuku.file, 'blink-wafuku.webm');
+test('final config has no skin transition; a legacy blink format still validates', () => {
+  assert.equal(config.skinTransition, undefined);
+  assert.equal(validateConfig(config).skinTransition, undefined);
+  const uniform = { file: 'blink-uniform.webm', closedAtSec: 2.5 };
   assert.deepEqual(validateConfig({ ...config, skinTransition: uniform }).skinTransition, { uniform });
-  for (const blink of [{ ...wafuku, file: '../blink.webm' }, { ...wafuku, closedAtSec: 3 }]) {
-    assert.throws(() => validateConfig({ ...config, skinTransition: { uniform, wafuku: blink } }), /Invalid skin transition/);
+  for (const blink of [{ ...uniform, file: '../blink.webm' }, { ...uniform, closedAtSec: 3 }]) {
+    assert.throws(() => validateConfig({ ...config, skinTransition: blink }), /Invalid skin transition/);
   }
-  assert.equal(validateConfig(config).clips.afterimage.endsClosed, true);
 });
 test('weighted picker excludes last item, including with deterministic randomness', () => {
   const director = new Director(config, () => 0);
@@ -288,11 +288,12 @@ test('manifest routes work, replies, alert and landing without a production move
   play(d, 'animation-end');
   assert.equal(auto(d, 150000, true).kind, 'idle.once');
   assert.equal(presence(d, 'working', 150001).clip, 'coding');
-  for (const [category, clip] of [['work', 'sharpen'], ['happy', 'laugh'], ['battle', 'afterimage']]) {
+  for (const [category, clip] of [['work', 'coding'], ['happy', 'laugh']]) {
     assert.equal(d.request([{ source: 'reply-category', category }], context())[0].action.clip, clip);
   }
+  assert.equal(d.request([{ source: 'reply-category', category: 'battle' }], context())[0].outcome, 'rejected');
   assert.equal(d.request([{ source: 'reply-category', category: 'constructor' }], context())[0].outcome, 'rejected');
-  assert.equal(play(d, 'click-startle').clip, 'guard');
+  assert.equal(play(d, 'click-startle').clip, 'startled');
   assert.equal(play(d, 'landing').clip, 'sitdown');
 });
 

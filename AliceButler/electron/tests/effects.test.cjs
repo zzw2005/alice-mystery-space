@@ -4,7 +4,8 @@ const config = require('../config.json');
 const { validateConfig } = require('../dist/main/engine');
 
 test('effects config supports both atmospheres and preserves the five action mappings', () => {
-  const { actions } = validateConfig(config).effects;
+  const { atmosphere, actions } = validateConfig(config).effects;
+  assert.equal(atmosphere, 'off');
   assert.deepEqual(Object.fromEntries(Object.entries(actions).map(([clip, { type, anchor }]) => [clip, [type, anchor]])), {
     clickhappy: ['stars', 'head'], laugh: ['stars', 'head'], clickshy: ['petals', 'head'],
     rage: ['steam', 'sides'], knock: ['impact', 'front']
