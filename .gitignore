@@ -4,3 +4,10 @@ __pycache__/
 
 # 生成工具缩略图缓存
 .thumbnails/
+
+# 桌宠中继凭据与运行态（永不入仓，仓为公开仓）
+AliceButler/relay-client-config.json
+AliceButler/relay-key.txt
+AliceButler/relay-state.json
+AliceButler/relay-status.json
+AliceButler/relay-client.log*
