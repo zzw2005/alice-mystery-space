@@ -15,6 +15,7 @@ type SimpleSource = WakeSource | 'startup' | 'resume' | 'media-fallback' | 'anim
   'long-press' | 'click';
 export type ActionRequest = { source: SimpleSource } |
   { source: 'presence'; state: Presence; valid: boolean } |
+  { source: 'menu-action'; clip: string } |
   { source: 'reply-category'; category: string } |
   { source: 'long-press-release'; cancelled?: boolean } |
   { source: 'test'; action: Action | 'sleep' | 'wake' };
@@ -28,13 +29,13 @@ const priority: Record<Source, number> = {
   startup: 5, resume: 5, 'media-fallback': 5, 'animation-end': 5,
   drag: 4, 'drag-release': 4, 'double-click': 4, 'long-press': 4, 'long-press-release': 4,
   'pointer-wake': 4, 'chat-open': 4, 'chat-send': 4, 'chat-reply': 4, 'menu-wake': 4, 'menu-sleep': 4,
-  placement: 4, 'config-reload': 4, 'desktop-return': 4, landing: 4, test: 4,
+  placement: 4, 'config-reload': 4, 'desktop-return': 4, landing: 4, 'menu-action': 4, test: 4,
   click: 3, 'click-combo': 3, 'click-startle': 3, presence: 2, 'reply-category': 2, 'hover-peek': 2, 'hover-exit': 2,
   'walk-end': 1, 'auto-sleep': 1, 'random-chain': 0
 };
 const wakes = new Set<Source>(['pointer-wake', 'chat-open', 'chat-send', 'chat-reply', 'menu-wake']);
 const reactionSources = new Set<Source>(['click', 'click-combo', 'click-startle', 'hover-peek']);
-const presenceProtected = new Set(['drag', 'long-press', 'sitdown', 'startled', 'peek', 'wave']);
+const presenceProtected = new Set(['drag', 'long-press', 'sitdown', 'startled', 'peek', 'wave', 'manual']);
 const idleAfter = new Set(['sitdown', 'peek', 'startled', 'wave']);
 const rejected = { outcome: 'rejected' } as const;
 function action(clip: string, loop: boolean, kind: string, rate = 1): Action { return { clip, loop, kind, rate }; }
@@ -126,6 +127,16 @@ export class Director {
   get rest() { return this.restState; }
   get presence() { return this.presenceState; }
   get current() { return this.active; }
+  get manualClips(): string[] {
+    const { animations, clips } = this.config;
+    const pools = [
+      animations.clicks, animations.idle.filter(entry => entry.loop === false), animations.turn,
+      ...Object.values(animations.categories ?? {}), ...Object.values(animations.reactions ?? {}),
+      animations.events?.done ?? [], animations.workStatus.success, animations.workStatus.error
+    ];
+    const choices = new Set(['peek', 'startled', 'sitdown', ...pools.flat().map(entry => entry.clip)]);
+    return [...choices].filter(id => Object.hasOwn(clips, id) && !clips[id].provisional && !this.unavailable.has(id));
+  }
   pickEntry(pool: Entry[], key: string): Entry {
     const candidates = pool.length > 1 ? pool.filter(e => e.clip !== this.last.get(key)) : pool;
     let ticket = this.random() * candidates.reduce((n, e) => n + e.weight, 0);
@@ -195,6 +206,9 @@ export class Director {
     const kind = this.current.kind;
     if (reactionSources.has(source) && ['long-press', 'drag'].includes(kind)) return rejected;
     switch (request.source) {
+      case 'menu-action':
+        return motion !== 'drag' && this.manualClips.includes(request.clip)
+          ? this.commit(action(request.clip, false, 'manual'), source) : rejected;
       case 'presence':
         if (this.protectedDrag(now) || presenceProtected.has(kind)) return rejected;
         if (request.state === 'success' || request.state === 'error') {
@@ -230,7 +244,7 @@ export class Director {
       case 'landing': return this.commit(this.triggerReaction('landing', 'sitdown'), source);
       case 'menu-sleep': return this.commit(this.sleep(), source);
       case 'auto-sleep':
-        if (motion === 'idle' && !this.protectedDrag(now) && kind !== 'long-press' && kind !== 'drag' &&
+        if (motion === 'idle' && !this.protectedDrag(now) && kind !== 'long-press' && kind !== 'drag' && kind !== 'manual' &&
             this.presence === 'idle' && !chatOpen && this.inactiveFor(now) >= this.config.tuning.idleSleepMs &&
             now - this.wakeEndedAt >= this.config.triggers.wakeProtectionMs)
           return this.commit(this.sleep(), source);

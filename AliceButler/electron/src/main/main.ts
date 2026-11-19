@@ -109,7 +109,9 @@ function sendChat(): void {
 function dispatch(requests: readonly ActionRequest[], now = Date.now()): void {
   if (!requests.length) return;
   const chatOpen = chat?.isVisible() ?? false;
+  const previousRest = director.rest;
   const decisions = director.request(requests, { now, motion: physics.mode, chatOpen });
+  if (previousRest !== director.rest) tray?.setContextMenu(menu());
   for (const [index, decision] of decisions.entries()) {
     if (requests[index].source === 'media-fallback' && decision.outcome === 'rejected') report('No playable clip remains');
     if (decision.outcome !== 'played') continue;
@@ -278,10 +280,29 @@ function setSetting<K extends keyof typeof settings>(key: K, value: (typeof sett
   } catch (error) { report('settings-write', error); }
   tray.setContextMenu(menu());
 }
+const actionLabels = new Map(Object.entries({
+  wave: '挥手', peek: '张望', startled: '受惊', sitdown: '摔坐',
+  clickhappy: '开心', clickshy: '害羞', clicktsun: '傲娇', knock: '敲击', hmph: '抱臂哼', rage: '大小姐被惹怒',
+  coding: '敲代码', stretch: '伸懒腰', meat: '吃肉', laugh: '大笑', sweat: '擦汗',
+  sword: '练剑', guard: '警戒', sharpen: '磨剑', ruins: '拔剑连斩', swordweb: '剑光成网',
+  giantslash: '蓄力上斩', nightwatch: '守夜', afterimage: '残影连斩', rainstand: '雨中伫立'
+}));
 function menu(): Menu {
   const atmospheres = { off: '关闭', glow: '浮光', snow: '落雪' } as const;
+  const clips = director.manualClips;
+  const actionGroups = (['uniform', 'wafuku'] as const).map(skin => ({
+    label: skin === 'uniform' ? '制服' : '和风',
+    submenu: clips.filter(clip => (director.config.clips[clip].skin ?? 'uniform') === skin).map(clip => ({
+      label: actionLabels.get(clip) ?? clip,
+      click: () => {
+        if (!pet.isVisible()) pet.showInactive();
+        interact({ source: 'menu-action', clip });
+      }
+    }))
+  })).filter(group => group.submenu.length > 0);
   return Menu.buildFromTemplate([
     { label: '和艾莉丝说话', click: () => { toggleChat().catch(report.bind(null, 'chat-window')); } },
+    { label: '选择动作', enabled: director.rest === 'awake' && clips.length > 0, submenu: actionGroups },
     { label: director?.rest === 'awake' ? '睡一会儿' : '起来', click: () => {
       interact({ source: director.rest === 'awake' ? 'menu-sleep' : 'menu-wake' });
     } },
@@ -470,7 +491,10 @@ async function setup(): Promise<void> {
     if (!trusted(event, pet)) return;
     const reason = message === 'poster' || message === 'first-frame' || message === 'skin-transition' ? message : 'decode';
     report('video-' + reason);
-    if (token === lastClipToken) dispatch([{ source: 'media-fallback' }]);
+    if (token === lastClipToken) {
+      dispatch([{ source: 'media-fallback' }]);
+      tray?.setContextMenu(menu());
+    }
   });
   ipcMain.on('playback-result', (event, token: unknown, outcome: unknown, reason: unknown) => {
     if (!trusted(event, pet) || typeof token !== 'number' || !Number.isSafeInteger(token) ||

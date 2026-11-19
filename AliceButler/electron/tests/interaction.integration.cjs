@@ -112,6 +112,40 @@ function videoRate(pet) {
   });
 }
 
+test('Electron action menu plays from the beginning, shows a hidden pet, and returns to idle after a skin change', async t => {
+  await withPet(t, async ({ app, pet, state, triggers }) => {
+    const groups = await app.evaluate(() => global.aliceTest.menu().items.find(item => item.label === '选择动作')
+      .submenu.items.map(group => [group.label, group.submenu.items.map(item => item.label)]));
+    assert.deepEqual(groups.map(([label]) => label), ['制服', '和风']);
+    assert.ok(groups[0][1].includes('害羞'));
+    assert.ok(groups[1][1].includes('练剑'));
+    assert.equal(groups.flatMap(([, actions]) => actions).length, 24);
+    const choose = (skin, label) => app.evaluate((_, { skin, label }) => {
+      global.aliceTest.menu().items.find(item => item.label === '选择动作').submenu.items
+        .find(item => item.label === skin).submenu.items.find(item => item.label === label).click();
+    }, { skin, label });
+    const visible = () => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isVisible());
+    assert.equal(await visible(), false);
+    await choose('制服', '害羞');
+    await waitClip(pet, 'clickshy', 'manual');
+    assert.equal(await visible(), true);
+    const start = await pet.evaluate(() => [...document.querySelectorAll('video')]
+      .find(video => video.style.opacity === '1').currentTime);
+    assert.ok(start < config.clips.clickshy.startOffset);
+
+    await choose('和风', '练剑');
+    await waitClip(pet, 'sword', 'manual');
+    assert.equal((await state()).action.loop, false);
+    await pet.evaluate(() => {
+      const video = [...document.querySelectorAll('video')].find(video => video.style.opacity === '1');
+      video.currentTime = video.duration - .05;
+    });
+    await waitClip(pet, 'idle', 'idle');
+    const manual = (await triggers()).filter(event => event.source === 'menu-action').map(event => event.clip);
+    assert.deepEqual(manual, ['clickshy', 'sword']);
+  });
+});
+
 test('Electron squashes on pointerdown, restarts on a second press and presents warmed click video while held', async t => {
   await withPet(t, async ({ app, pet, state }) => {
     const point = { x: 272, y: 177 };
@@ -251,6 +285,7 @@ test('Electron closes eyes for wardrobe changes and a real click supersedes the 
     assert.equal(counts.at(-1), 2, 'both the pending wardrobe action and the first press were superseded');
 
     const firstClickToken = await pet.locator('#actor').getAttribute('data-token');
+    await pet.waitForFunction(() => performance.now() - window.duckPlays[0] >= 100);
     await pointer(pet, 'down');
     await pointer(pet, 'up');
     await pet.waitForFunction(() => window.duckPlays.length === 2);

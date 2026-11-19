@@ -28,6 +28,34 @@ function presence(director, state, now, motion) {
   return director.request([{ source: 'presence', state, valid: true }], context(now, motion))[0].action ?? null;
 }
 
+test('manual selection plays configured one-shots and respects sleep, drag and media availability', () => {
+  const d = new Director(validateConfig(config), () => 0, 0);
+  const select = (clip, motion) => d.request([{ source: 'menu-action', clip }], context(0, motion))[0];
+  play(d, 'startup');
+  assert.equal(d.manualClips.length, 24);
+  assert.equal(new Set(d.manualClips).size, d.manualClips.length);
+  for (const clip of ['idle', 'dangle', 'doze', 'sleepstart', 'wakeup', 'blink-wafuku', 'unknown'])
+    assert.equal(select(clip).outcome, 'rejected', clip);
+  assert.equal(select('sword', 'drag').outcome, 'rejected');
+  assert.deepEqual(select('sword').action, { clip: 'sword', loop: false, kind: 'manual', rate: 1 });
+  assert.equal(play(d, 'auto-sleep', config.tuning.idleSleepMs + 1), null);
+  assert.equal(presence(d, 'working'), null, 'work status does not interrupt manual playback');
+  assert.equal(play(d, 'animation-end').clip, 'coding');
+  select('sword');
+  play(d, 'media-fallback');
+  assert.equal(select('sword').outcome, 'rejected');
+  assert.ok(!d.manualClips.includes('sword'));
+
+  play(d, 'menu-sleep');
+  assert.equal(select('wave').outcome, 'rejected');
+  play(d, 'animation-end');
+  assert.equal(select('wave').outcome, 'rejected');
+  play(d, 'menu-wake');
+  assert.equal(select('wave').outcome, 'rejected');
+  play(d, 'animation-end');
+  assert.equal(select('wave').outcome, 'played');
+});
+
 test('config validates all referenced clips and rejects unsafe paths/weights', () => {
   validateConfig(config);
   const broken = structuredClone(config); broken.clips.idle.file = '../secrets.webm';
