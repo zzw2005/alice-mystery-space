@@ -1,12 +1,29 @@
+import { defaultTuning } from './tuning';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
 export type Message = { id: string; text: string; mine: boolean; ts?: string };
+
+export class ReplyQueue {
+  private replies: Message[] = [];
+  private deliveredAt = -Infinity;
+  enqueue(replies: Message[]): void { for (const reply of replies) this.replies.push(reply); }
+  next(now: number, gap: number): Message | number | undefined {
+    if (!this.replies.length) return;
+    const remaining = this.deliveredAt + gap - now;
+    if (remaining > 0) return remaining;
+    return this.replies.shift();
+  }
+  delivered(now: number): void {
+    this.deliveredAt = this.replies.length ? now : -Infinity;
+  }
+}
+
 export class Bridge {
   private failures = new Map<string, number>();
-  constructor(readonly root: string) {}
+  constructor(readonly root: string, public tuning = defaultTuning) {}
   async send(text: unknown): Promise<Message> {
-    if (typeof text !== 'string' || !text.trim() || text.length > 20000) throw Error('消息为空或过长');
+    if (typeof text !== 'string' || !text.trim() || text.length > this.tuning.maxMessageChars) throw Error('消息为空或过长');
     const id = 'msg-' + new Date().toISOString().replace(/\D/g, '').slice(0, 14) + '-' + crypto.randomBytes(3).toString('hex');
     const data = { id, ts: new Date().toISOString(), text: text.trim() };
     const dir = path.join(this.root, 'inbox'); await fs.mkdir(dir, { recursive: true });
@@ -25,12 +42,12 @@ export class Bridge {
       try {
         let data: { id: string; text: string; ts?: string };
         try {
-          if ((await fs.stat(file)).size > 1024 * 1024) throw Error('Oversized reply');
+          if ((await fs.stat(file)).size > this.tuning.maxReplyBytes) throw Error('Oversized reply');
           data = JSON.parse((await fs.readFile(file, 'utf8')).replace(/^\uFEFF/, ''));
           if (!data || typeof data.text !== 'string' || !data.text.trim()) throw Error('Invalid reply');
         } catch {
           const count = (this.failures.get(name) ?? 0) + 1; this.failures.set(name, count);
-          if (count >= 5 && Date.now() - (await fs.stat(file)).mtimeMs > 90000) { await fs.rename(file, file + '.bad'); this.failures.delete(name); }
+          if (count >= this.tuning.replyBadCount && Date.now() - (await fs.stat(file)).mtimeMs > this.tuning.replyBadAgeMs) { await fs.rename(file, file + '.bad'); this.failures.delete(name); }
           continue;
         }
         const dest = path.join(seen, name);
@@ -45,7 +62,7 @@ export class Bridge {
     const result: Message[] = [];
     const dir = path.join(this.root, 'inbox', 'seen');
     let names: string[];
-    try { names = (await fs.readdir(dir)).filter(n => /^msg-[\w-]+\.json$/.test(n)).sort().slice(-30); }
+    try { names = (await fs.readdir(dir)).filter(n => /^msg-[\w-]+\.json$/.test(n)).sort().slice(-this.tuning.historyPairs); }
     catch (e) { if ((e as NodeJS.ErrnoException).code === 'ENOENT') return []; throw e; }
     for (const name of names) {
       for (const [file, mine] of [[path.join(dir, name), true], [path.join(this.root, 'outbox', 'seen', 'reply-' + name), false]] as const) {

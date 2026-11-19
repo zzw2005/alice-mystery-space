@@ -7,7 +7,10 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $package = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../AliceButler/electron/release/AlicePetNew-win32-x64'))
+$checks = (Get-Content -LiteralPath (Join-Path $PSScriptRoot '../AliceButler/butler-config.json') -Raw | ConvertFrom-Json).deployChecks
 $target = 'C:\ProgramData\AliceButler'
+$pwsh = 'C:\Program Files\PowerShell\7\pwsh.exe'
+if (!(Test-Path -LiteralPath $pwsh)) { throw "System PowerShell 7 not found: $pwsh" }
 if (!$ReportPath) { $ReportPath = Join-Path $target 'electron-deploy-result.json' }
 if ($Asset -and !$PSBoundParameters.ContainsKey('ReportPath')) {
     $ReportPath = Join-Path $target 'electron-asset-deploy-result.json'
@@ -23,7 +26,7 @@ function Stop-Pet {
     & schtasks.exe /end /tn AlicePetLaunch 2>$null | Out-Null
     foreach ($p in @(Get-Process AlicePetNew -ErrorAction SilentlyContinue)) {
         Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
-        $p.WaitForExit(5000) | Out-Null
+        $p.WaitForExit($checks.stopWaitMs) | Out-Null
     }
 }
 $stamp = [DateTime]::UtcNow
@@ -73,12 +76,13 @@ if ($Asset) {
         if ((Get-FileHash -LiteralPath $assetStage).Hash -ne $assetHash) { throw "Staged hash mismatch: $Asset" }
         Copy-Item -LiteralPath $assetStage -Destination $assetTarget -Force
         if ((Get-FileHash -LiteralPath $assetTarget).Hash -ne $assetHash) { throw "Target hash mismatch: $Asset" }
+        Remove-Item -LiteralPath (Join-Path $target 'pet-disabled.flag') -Force -ErrorAction SilentlyContinue
         Write-Output "[2/4] Launch AlicePetLaunch and require fresh video/heartbeat"
         & schtasks.exe /run /tn AlicePetLaunch
         if ($LASTEXITCODE -ne 0) { throw 'AlicePetLaunch failed' }
         $ready = $false
-        for ($i=0; $i -lt 90; $i++) {
-            Start-Sleep -Milliseconds 500
+        for ($i=0; $i -lt $checks.videoAttempts; $i++) {
+            Start-Sleep -Milliseconds $checks.pollMs
             $start = Join-Path $target 'pet-start.log'; $hb = Join-Path $target 'pet-heartbeat.txt'
             if ((Get-Process AlicePetNew -ErrorAction SilentlyContinue) -and
                 (Test-Path $start) -and (Get-Item $start).LastWriteTimeUtc -ge $stamp -and
@@ -91,14 +95,14 @@ if ($Asset) {
         $task = 'AliceDeploySmoke-' + $smokeId
         try {
             $writer = Join-Path $PSScriptRoot 'write-deploy-smoke.ps1'
-            $action = New-ScheduledTaskAction -Execute (Get-Command pwsh.exe).Source -Argument ('-NoProfile -File "' + $writer + '" -Id ' + $smokeId)
+            $action = New-ScheduledTaskAction -Execute $pwsh -Argument ('-NoProfile -File "' + $writer + '" -Id ' + $smokeId)
             $principal = New-ScheduledTaskPrincipal -UserId SYSTEM -LogonType ServiceAccount -RunLevel Highest
             Register-ScheduledTask -TaskName $task -Action $action -Principal $principal | Out-Null
             Start-ScheduledTask -TaskName $task
             $receipt = Join-Path $target "done\$smokeId.result.json"
             $result = $null
-            for ($i=0; $i -lt 60; $i++) {
-                Start-Sleep -Milliseconds 500
+            for ($i=0; $i -lt $checks.receiptAttempts; $i++) {
+                Start-Sleep -Milliseconds $checks.pollMs
                 if (Test-Path $receipt) { $result = Get-Content $receipt -Raw | ConvertFrom-Json; break }
             }
             if ($null -eq $result -or $result.exitCode -ne 0) { throw 'Smoke receipt missing or nonzero' }
@@ -167,12 +171,13 @@ try {
         if ((Get-FileHash -LiteralPath $dest).Hash -ne $item.hash) { throw "Target hash mismatch: $($item.relative)" }
     }
     $manifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $backup 'new-package-manifest.json') -Encoding utf8NoBOM
+    Remove-Item -LiteralPath (Join-Path $target 'pet-disabled.flag') -Force -ErrorAction SilentlyContinue
     Write-Output '[3/5] Launch existing AlicePetLaunch and require fresh video/heartbeat'
     & schtasks.exe /run /tn AlicePetLaunch
     if ($LASTEXITCODE -ne 0) { throw 'AlicePetLaunch failed' }
     $ready = $false
-    for ($i=0; $i -lt 90; $i++) {
-        Start-Sleep -Milliseconds 500
+    for ($i=0; $i -lt $checks.videoAttempts; $i++) {
+        Start-Sleep -Milliseconds $checks.pollMs
         $start = Join-Path $target 'pet-start.log'; $hb = Join-Path $target 'pet-heartbeat.txt'
         if ((Get-Process AlicePetNew -ErrorAction SilentlyContinue) -and
             (Test-Path $start) -and (Get-Item $start).LastWriteTimeUtc -ge $stamp -and
@@ -185,14 +190,14 @@ try {
     $task = 'AliceDeploySmoke-' + $smokeId
     try {
         $writer = Join-Path $PSScriptRoot 'write-deploy-smoke.ps1'
-        $action = New-ScheduledTaskAction -Execute (Get-Command pwsh.exe).Source -Argument ('-NoProfile -File "' + $writer + '" -Id ' + $smokeId)
+        $action = New-ScheduledTaskAction -Execute $pwsh -Argument ('-NoProfile -File "' + $writer + '" -Id ' + $smokeId)
         $principal = New-ScheduledTaskPrincipal -UserId SYSTEM -LogonType ServiceAccount -RunLevel Highest
         Register-ScheduledTask -TaskName $task -Action $action -Principal $principal | Out-Null
         Start-ScheduledTask -TaskName $task
         $receipt = Join-Path $target "done\$smokeId.result.json"
         $result = $null
-        for ($i=0; $i -lt 60; $i++) {
-            Start-Sleep -Milliseconds 500
+        for ($i=0; $i -lt $checks.receiptAttempts; $i++) {
+            Start-Sleep -Milliseconds $checks.pollMs
             if (Test-Path $receipt) { $result = Get-Content $receipt -Raw | ConvertFrom-Json; break }
         }
         if ($null -eq $result -or $result.exitCode -ne 0) { throw 'Smoke receipt missing or nonzero' }

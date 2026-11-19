@@ -25,3 +25,25 @@ test('file bridge: atomic send, consume before display, duplicate suppression, q
   await fs.mkdir(path.join(root, 'inbox/seen')); await fs.rename(file, path.join(root, 'inbox/seen', message.id + '.json'));
   assert.deepEqual((await bridge.history()).map(m => [m.mine, m.text]), [[true, '你好'], [false, '收到']]);
 });
+
+test('reply FIFO delivers immediately when idle and spaces replies across batches', () => {
+  const { ReplyQueue } = require('../dist/main/bridge');
+  const queue = new ReplyQueue();
+  const reply = id => ({ id, text: id, mine: false });
+  const [a, b, c, d, e] = ['a', 'b', 'c', 'd', 'e'].map(reply);
+  queue.enqueue([a, b, c]);
+  assert.equal(queue.next(1000, 800), a);
+  queue.delivered(1000);
+  queue.enqueue([d]);
+  assert.equal(queue.next(1799, 800), 1);
+  assert.equal(queue.next(1800, 800), b);
+  queue.delivered(1800);
+  assert.equal(queue.next(2650, 800), c);
+  queue.delivered(2650);
+  assert.equal(queue.next(3449, 800), 1);
+  assert.equal(queue.next(3450, 800), d);
+  queue.delivered(3450);
+  assert.equal(queue.next(3450, 800), undefined);
+  queue.enqueue([e]);
+  assert.equal(queue.next(3451, 800), e);
+});

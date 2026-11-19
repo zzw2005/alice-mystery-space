@@ -1,5 +1,5 @@
 {
-  "_note": "Registry of live tuning values (stage 0). Components still read their code defaults; this file is the single reference for what the values ARE and will become the runtime source in stage 2. Keep in sync per CHANGE-DISCIPLINE.md rule 9.",
+  "_note": "runner、watchdog、presence 与部署工具使用本文件。旧版桌宠的登记项供历史对照；Electron 桌宠以 electron/config.json 为准。",
   "idlePoolWeights": {
     "celebrate": 12,
     "fish": 14,
@@ -50,5 +50,52 @@
     "presenceRefreshMin": 8,
     "presenceValidMin": 12,
     "runnerHeartbeatStaleSec": 90
+  },
+  "runner": {
+    "scanMs": 1000,
+    "heartbeatMs": 5000,
+    "initialSweepMs": 60000,
+    "sweepMs": 86400000,
+    "stopConfirmMs": 800,
+    "jobBadAgeMs": 60000,
+    "retentionDays": 30,
+    "statusEvents": 8,
+    "memoryEvents": 30,
+    "eventLogMiB": 2
+  },
+  "watchdogRestartMs": 2500,
+  "deployChecks": {
+    "stopWaitMs": 5000,
+    "pollMs": 500,
+    "videoAttempts": 90,
+    "receiptAttempts": 60
+  },
+  "_notes": {
+    "runner": {
+      "scanMs": "任务目录扫描间隔",
+      "heartbeatMs": "心跳写入间隔",
+      "initialSweepMs": "开机首次清理延迟",
+      "sweepMs": "定期清理间隔",
+      "stopConfirmMs": "停止接管进程后确认延迟",
+      "jobBadAgeMs": "坏任务隔离最小年龄",
+      "retentionDays": "完成记录、日志和停止标记保留天数",
+      "statusEvents": "状态文件事件条数",
+      "memoryEvents": "内存最近事件条数",
+      "eventLogMiB": "事件日志轮换大小"
+    },
+    "watchdogRestartMs": "结束陈旧任务后再次启动的延迟",
+    "deployChecks": {
+      "stopWaitMs": "进程退出等待上限",
+      "pollMs": "冒烟检查轮询间隔",
+      "videoAttempts": "新视频心跳最多尝试次数",
+      "receiptAttempts": "任务回执最多尝试次数"
+    },
+    "runnerRespawn": "退避秒数、窗口内重启次数预算与窗口分钟数",
+    "watchThresholds": "心跳判活（秒）与在岗刷新、有效期（分钟）",
+    "limits": "大小上限 MB、保留时长和坏文件隔离次数，字段后缀标明单位。"
+  },
+  "dailyCheck": {
+    "probeWaitMs": 240000,
+    "diskMinMiB": 512
   }
 }

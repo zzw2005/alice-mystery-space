@@ -9,10 +9,11 @@ const error = document.querySelector<HTMLElement>('#error')!;
 const empty = document.querySelector<HTMLElement>('#empty')!;
 let signature = '';
 window.alice.onChat(data => {
+  input.maxLength = data.tuning.maxMessageChars;
   status.textContent = '电脑分身 · ' + data.note;
   const next = JSON.stringify(data.messages);
   if (signature !== next) {
-    const atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 48;
+    const atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < data.tuning.chatScrollPx;
     signature = next; list.replaceChildren();
     for (const message of data.messages) {
       const row = document.createElement('div'); row.className = 'row ' + (message.mine ? 'mine' : 'hers');

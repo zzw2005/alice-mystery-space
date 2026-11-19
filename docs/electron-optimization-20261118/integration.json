@@ -1,0 +1,65 @@
+{
+  "root": "/workspace/alice-mystery-space/AliceButler/electron/test-results/electron-tuqfmi",
+  "alpha": {
+    "black": 0.00004774305555555556,
+    "transparent": 196700,
+    "solid": 32441,
+    "width": 640,
+    "height": 360
+  },
+  "stats": {
+    "ts": "2026-11-17T18:47:25.734Z",
+    "runtime": "electron",
+    "diskLoads": 0,
+    "decodedFrames": 72,
+    "intervalMs": 52483,
+    "clip": "wave",
+    "restState": "awake",
+    "processCount": 5,
+    "workingSetMB": 736.8828125,
+    "privateMB": null,
+    "cpuPercent": 0,
+    "startupMs": 289.735918,
+    "suspended": false,
+    "acceleration": "on",
+    "processes": [
+      {
+        "type": "Browser",
+        "pid": 6647,
+        "workingSetMB": 162.73046875
+      },
+      {
+        "type": "GPU",
+        "pid": 6676,
+        "workingSetMB": 112.47265625
+      },
+      {
+        "type": "Utility",
+        "pid": 6678,
+        "workingSetMB": 80.77734375
+      },
+      {
+        "type": "Tab",
+        "pid": 6699,
+        "workingSetMB": 259.171875
+      },
+      {
+        "type": "Tab",
+        "pid": 6737,
+        "workingSetMB": 121.73046875
+      }
+    ]
+  },
+  "checks": [
+    "nine clips",
+    "alpha video",
+    "idle loop wrap",
+    "walk mirroring",
+    "sandbox",
+    "sleep relay",
+    "six presence modes",
+    "atomic chat",
+    "text safety"
+  ],
+  "errors": []
+}

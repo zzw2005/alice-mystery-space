@@ -8,8 +8,11 @@
     "build": "tsc -p tsconfig.main.json && tsc -p tsconfig.renderer.json",
     "test": "npm run build && node --test tests/*.test.cjs",
     "start": "npm run build && electron .",
-    "package": "npm run build && electron-packager . AlicePetNew --platform=win32 --arch=x64 --out=release --overwrite --ignore=release --ignore=tests --ignore=src --ignore=tsconfig --no-asar --ignore=test-results --ignore=package-lock.json --ignore=README.md",
-    "test:electron": "npm run build && node tests/electron.integration.cjs"
+    "package": "npm run build && node scripts/package.mjs",
+    "test:electron": "npm run build && node tests/electron.integration.cjs",
+    "test:playback": "npm run build && node tests/playback.integration.cjs",
+    "bench": "npm run build && node tests/performance.cjs",
+    "precheck": "npm run build && node tests/precheck.cjs"
   },
   "devDependencies": {
     "@electron/packager": "20.3.0",
