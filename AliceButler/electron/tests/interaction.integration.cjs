@@ -193,7 +193,7 @@ test('Electron closes eyes for wardrobe changes and a real click supersedes the 
     await stopSample(pet);
 
     await app.evaluate(() => global.aliceTest.menu().items.find(i => i.label === '点击音效').click());
-    assert.deepEqual(JSON.parse(await fs.readFile(path.join(root, 'pet-settings.json'), 'utf8')), { clickSoundEnabled: false });
+    assert.equal(JSON.parse(await fs.readFile(path.join(root, 'pet-settings.json'), 'utf8')).clickSoundEnabled, false);
     await app.evaluate(() => global.aliceTest.play('sword'));
     await waitClip(pet, 'sword');
     const beforeActiveCancel = Object.values((await stats()).days).at(-1).cancelled.superseded;

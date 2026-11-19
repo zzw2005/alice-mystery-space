@@ -472,5 +472,35 @@
       "file": "blink-wafuku.webm",
       "closedAtSec": 2.5
     }
+  },
+  "effects": {
+    "atmosphere": "glow",
+    "actions": {
+      "clickhappy": {
+        "type": "stars",
+        "anchor": "head",
+        "intensity": 0.85
+      },
+      "laugh": {
+        "type": "stars",
+        "anchor": "head",
+        "intensity": 0.65
+      },
+      "clickshy": {
+        "type": "petals",
+        "anchor": "head",
+        "intensity": 0.8
+      },
+      "rage": {
+        "type": "steam",
+        "anchor": "sides",
+        "intensity": 1
+      },
+      "knock": {
+        "type": "impact",
+        "anchor": "front",
+        "intensity": 0.9
+      }
+    }
   }
 }

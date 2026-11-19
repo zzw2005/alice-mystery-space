@@ -8,6 +8,7 @@ interface AliceAPI {
   ready(kind: 'pet' | 'chat'): void;
   onPlay(cb: (data: import('./player').PlayRequest) => void): () => void;
   onClickSound(cb: () => void): () => void;
+  onEffectsState(cb: (data: import('../shared/effects').EffectsState) => void): () => void;
   onReclaimDone(cb: () => void): void;
   onReclaim(cb: () => void): void; reclaimed(): void;
   onProbe(cb: (data: { day: string; clips: Record<string, string>; timeoutMs: number }) => void): void;

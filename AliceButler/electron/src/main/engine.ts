@@ -1,5 +1,7 @@
 import { defaultTuning, readTriggers, readTuning, TriggerConfig, Tuning } from './tuning';
 import type { InteractionConfig } from './gestures';
+import type { EffectsConfig } from '../shared/effects';
+import { readEffects } from './effects-config';
 export type Presence = 'idle' | 'thinking' | 'working' | 'result' | 'waiting' | 'success' | 'error';
 export type Entry = { clip: string; weight: number; loop?: boolean; provisional?: boolean };
 export type Action = Readonly<{ clip: string; loop: boolean; kind: string; rate: number }>;
@@ -39,6 +41,7 @@ const rejected = { outcome: 'rejected' } as const;
 function action(clip: string, loop: boolean, kind: string, rate = 1): Action { return { clip, loop, kind, rate }; }
 export interface PetConfig {
   tuning: Tuning;
+  effects: EffectsConfig;
   interaction: InteractionConfig;
   triggers: TriggerConfig;
   animations: {
@@ -99,7 +102,7 @@ export function validateConfig(input: unknown): PetConfig {
   if (!Array.isArray(c.idleSeconds) || c.idleSeconds.length !== 2 || c.idleSeconds.some(v => !Number.isFinite(v)) || c.idleSeconds[0] < 10 || c.idleSeconds[1] < c.idleSeconds[0] || c.idleSeconds[1] > 600) throw Error('Invalid idle interval');
   const triggers = readTriggers(c.triggers);
   if (!c.clips.clicktsun) throw Error('Missing interaction clip: clicktsun');
-  return { ...c, skinTransition, tuning: readTuning(c.tuning), triggers };
+  return { ...c, skinTransition, tuning: readTuning(c.tuning), triggers, effects: readEffects(c.effects, c.clips) };
 }
 export class Director {
   private restState: 'awake' | 'entering' | 'asleep' | 'waking' = 'awake';

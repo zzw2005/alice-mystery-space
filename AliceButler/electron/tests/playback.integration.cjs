@@ -6,8 +6,15 @@ const delay = ms => new Promise(r => setTimeout(r, ms));
 (async () => {
   const base = path.resolve(__dirname, '../test-results'); await fs.mkdir(base, { recursive: true });
   const root = await fs.mkdtemp(path.join(base, 'playback-'));
+  const effects = process.env.ALICE_TEST_EFFECTS_MODE;
+  if (effects) {
+    assert.ok(['on', 'off'].includes(effects));
+    await fs.writeFile(path.join(root, 'pet-settings.json'), JSON.stringify({ effectsEnabled: effects === 'on' }));
+  }
   const app = await _electron.launch({ executablePath: require('electron'),
-    args: [...(process.env.ALICE_TEST_NO_SANDBOX === '1' ? ['--no-sandbox'] : []), `--user-data-dir=${path.join(root, 'profile')}`, path.resolve(__dirname, '..')],
+    args: [...(process.env.ALICE_TEST_NO_SANDBOX === '1' ? ['--no-sandbox'] : []),
+      ...(process.env.ALICE_TEST_SWIFTSHADER === '1' ? ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] : []),
+      `--user-data-dir=${path.join(root, 'profile')}`, path.resolve(__dirname, '..')],
     env: { ...process.env, ALICE_PET_TEST: '1', ALICE_PET_ROOT: root } });
   const errors = []; app.on('window', p => p.on('pageerror', e => errors.push(e.message)));
   try {
@@ -18,6 +25,24 @@ const delay = ms => new Promise(r => setTimeout(r, ms));
     await pet.waitForFunction(() => document.querySelector('#actor').dataset.clip === 'idle');
     for (let i = 0; i < 100 && !await app.evaluate(() => Boolean(global.aliceTest)); i++) await delay(50);
     assert.equal(app.windows().length, 1);
+    let steadyVideo;
+    if (effects) {
+      await pet.waitForFunction(mode => {
+        const host = document.querySelector('#effects');
+        return mode === 'on' ? host?.dataset.renderer === 'webgl2' && !host.hidden : !host?.querySelector('canvas');
+      }, effects);
+      await delay(400);
+      steadyVideo = await pet.evaluate(async () => {
+        const video = [...document.querySelectorAll('video')].find(v => v.style.opacity === '1');
+        const before = video.getVideoPlaybackQuality(), start = performance.now();
+        await new Promise(resolve => setTimeout(resolve, 2200));
+        const after = video.getVideoPlaybackQuality();
+        const frames = after.totalVideoFrames - before.totalVideoFrames;
+        const dropped = after.droppedVideoFrames - before.droppedVideoFrames;
+        return { frames, fps: (frames - dropped) * 1000 / (performance.now() - start), dropped };
+      });
+      assert.ok(steadyVideo.frames > 0);
+    }
     // Composite a downscaled actor every display frame, including the poster,
     // to detect transparent/black gaps without full-size readback test overhead.
     await pet.evaluate(() => {
@@ -117,7 +142,7 @@ const delay = ms => new Promise(r => setTimeout(r, ms));
     assert.deepEqual(errors, []);
     const log = await fs.readFile(path.join(root, 'pet-error.log'), 'utf8').catch(e => { if (e.code === 'ENOENT') return ''; throw e; });
     assert.equal(log, '', log);
-    const result = { checks: check, sleepSoak: process.env.ALICE_PLAYBACK_SOAK === '1', errors,
+    const result = { checks: check, effects, steadyVideo, sleepSoak: process.env.ALICE_PLAYBACK_SOAK === '1', errors,
       state: await app.evaluate(() => global.aliceTest.state()) };
     await fs.writeFile(path.join(root, 'result.json'), JSON.stringify(result, null, 2));
     console.log(JSON.stringify({ root, ...result }, null, 2));

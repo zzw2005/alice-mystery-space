@@ -1,9 +1,11 @@
 import { probeClips } from "./decode-probe.js";
 import { bodyMask } from './hit-mask.js';
 import { Player } from './player.js';
+import { EffectsLayer } from './effects.js';
 const videos = Array.from(document.querySelectorAll('video'));
 const actor = document.querySelector<HTMLElement>('#actor')!;
 const shadow = document.querySelector<HTMLElement>('#shadow')!;
+const effects = new EffectsLayer(document.querySelector<HTMLElement>('#effects')!);
 const mask = document.createElement('canvas'); mask.width = 640; mask.height = 360;
 const context = mask.getContext('2d', { willReadFrequently: true })!;
 let lastHit = false, facing = 'right', direction = 1, squash = 1, maskDirty = true;
@@ -19,15 +21,19 @@ function capture(): void {
   maskDirty = false;
 }
 const player = new Player(videos, document.querySelector<HTMLCanvasElement>('#poster')!, actor, reducedMotion,
-  data => { facing = data.facing; direction = data.direction; maskDirty = true; }, () => { maskDirty = true; });
+  data => {
+    facing = data.facing; direction = data.direction; maskDirty = true;
+    effects.present(data.clip, data.token);
+  }, () => { maskDirty = true; });
 let display: DisplayTuning;
 window.alice.onPlay(data => { display = data.tuning; void player.play(data); });
+window.alice.onEffectsState(state => effects.configure(state));
 const clickSound = new Audio('../media/click-duck.wav');
 window.alice.onClickSound(() => {
   clickSound.currentTime = 0;
   void clickSound.play().catch(() => {});
 });
-window.alice.onSuspend(() => { capture(); player.suspend(); });
+window.alice.onSuspend(() => { capture(); player.suspend(); effects.suspend(); });
 function mirrored(): boolean { return ['moves', 'peek'].includes(actor.dataset.kind ?? '') && ((facing === 'right' && direction < 0) || (facing === 'left' && direction > 0)); }
 window.alice.onPose(pose => {
   direction = pose.direction; squash = reducedMotion.matches ? 1 : pose.squash;

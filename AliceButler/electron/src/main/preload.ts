@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('alice', {
   ready: (kind: 'pet' | 'chat') => ipcRenderer.send(kind === 'pet' ? 'renderer-ready' : 'chat-ready'),
   onPlay: (callback: (data: unknown) => void) => subscribe('play', callback),
   onClickSound: (callback: () => void) => subscribe('click-sound', callback),
+  onEffectsState: (callback: (data: unknown) => void) => subscribe('effects-state', callback),
   onReclaim: (callback: () => void) => subscribe("reclaim", callback),
   onReclaimDone: (callback: () => void) => subscribe("reclaim-done", callback),
   reclaimed: () => ipcRenderer.send("reclaimed"),

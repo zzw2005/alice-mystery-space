@@ -11,6 +11,7 @@ import { pathToFileURL } from 'node:url';
 import { Absence, Gestures, PointerPress } from './gestures';
 import { Bridge, Message, ReplyQueue } from './bridge';
 import { Action, ActionRequest, Director, Physics, Presence, validateConfig } from './engine';
+import type { EffectsState } from '../shared/effects';
 
 const launchAt = performance.now();
 // Preserve Chromium's current default until the target Windows A/B is accepted.
@@ -61,7 +62,8 @@ function report(operation: string, error?: unknown): void {
 const statePath = path.join(root, 'pet-position.json');
 const settingsPath = path.join(root, 'pet-settings.json');
 const clickSoundIntervalMs = 100;
-let clickSoundEnabled = true, lastClickSoundAt = -Infinity;
+let settings = { clickSoundEnabled: true, effectsEnabled: true };
+let lastClickSoundAt = -Infinity;
 let standing = false, desktop: Position, lastSaved = '';
 const gestures = new Gestures(), absence = new Absence();
 let approached = false;
@@ -174,7 +176,7 @@ function finishPress(cursor: Electron.Point, now: number, cancelled: boolean): v
   const { tuning } = director.config;
   const release = held.release(cursor, now, tuning);
   doubleAllowed = release === 'click' && !cancelled;
-  if (clickSoundEnabled && !cancelled && (release === 'click' || held.isWakeClick(cursor, now, tuning))) {
+  if (settings.clickSoundEnabled && !cancelled && (release === 'click' || held.isWakeClick(cursor, now, tuning))) {
     const soundAt = performance.now();
     if (soundAt - lastClickSoundAt >= clickSoundIntervalMs) {
       lastClickSoundAt = soundAt;
@@ -255,6 +257,20 @@ function rollback(id: string): void {
   child.on('error', report.bind(null, 'rollback-launch'));
   child.on('exit', code => { if (code) report('Rollback helper launch failed: ' + code); });
 }
+function sendEffectsState(): void {
+  if (!ready || pet.isDestroyed()) return;
+  const state: EffectsState = { enabled: settings.effectsEnabled, visible: pet.isVisible(), config: director.config.effects };
+  pet.webContents.send('effects-state', state);
+}
+function setSetting(key: keyof typeof settings, checked: boolean): void {
+  try {
+    const next = { ...settings, [key]: checked };
+    atomicWrite(settingsPath, JSON.stringify(next));
+    settings = next;
+    if (key === 'effectsEnabled') sendEffectsState();
+  } catch (error) { report('settings-write', error); }
+  tray.setContextMenu(menu());
+}
 function menu(): Menu {
   return Menu.buildFromTemplate([
     { label: '和艾莉丝说话', click: () => { toggleChat().catch(report.bind(null, 'chat-window')); } },
@@ -262,13 +278,8 @@ function menu(): Menu {
       interact({ source: director.rest === 'awake' ? 'menu-sleep' : 'menu-wake' });
     } },
     { label: '任务栏站立', type: 'checkbox', checked: standing, click: item => setStanding(item.checked) },
-    { label: '点击音效', type: 'checkbox', checked: clickSoundEnabled, click: item => {
-      try {
-        atomicWrite(settingsPath, JSON.stringify({ clickSoundEnabled: item.checked }));
-        clickSoundEnabled = item.checked;
-      } catch (error) { report('settings-write', error); }
-      tray.setContextMenu(menu());
-    } },
+    { label: '点击音效', type: 'checkbox', checked: settings.clickSoundEnabled, click: item => setSetting('clickSoundEnabled', item.checked) },
+    { label: '特效', type: 'checkbox', checked: settings.effectsEnabled, click: item => setSetting('effectsEnabled', item.checked) },
     { label: '跳一下', click: () => { finishPress(screen.getCursorScreenPoint(), Date.now(), true); physics.mode = 'air'; physics.vy = -330; physics.vx = 0; } },
     { label: '回到原位', click: () => { finishPress(screen.getCursorScreenPoint(), Date.now(), true); physics.mode = 'idle'; physics.x = area().right - director.config.tuning.homeInsetPx; physics.y = area().floor; } },
     { label: pet?.isVisible() ? '隐藏桌宠' : '显示桌宠', click: () => pet.isVisible() ? pet.hide() : pet.showInactive() },
@@ -312,6 +323,7 @@ async function loadConfig(): Promise<void> {
   }
   if (director) { director.replaceConfig(config); gestures.resetClicks(); actionRequests.push({ source: 'config-reload' }); }
   else director = new Director(config);
+  sendEffectsState();
   bridge.tuning = config.tuning;
   if (timers.length) startTimers();
   configStamp = (await fs.stat(configPath).catch(e => { if (e.code === 'ENOENT') return undefined; throw e; }))?.mtimeMs;
@@ -346,14 +358,21 @@ async function trimPlaybackMemory(highWater = false): Promise<void> {
 }
 async function setup(): Promise<void> {
   await fs.mkdir(root, { recursive: true });
-  try { clickSoundEnabled = (await optionalJson('pet-settings.json'))?.clickSoundEnabled !== false; }
+  try {
+    const saved = await optionalJson('pet-settings.json');
+    settings = { clickSoundEnabled: saved?.clickSoundEnabled !== false, effectsEnabled: saved?.effectsEnabled !== false };
+  }
   catch (error) { report('settings-read', error); }
   runStats = new RunStats(statsPath);
   await loadConfig();
   pet = new BrowserWindow({ ...windowOptions(), ...petSize, transparent: true, hasShadow: false, title: '艾莉丝桌宠' });
   secureWindow(pet);
-  pet.on('hide', () => { hiddenByUser = true; });
-  pet.on('show', () => { hiddenByUser = false; lowActivityAt = 0; if (suspended || parkPending) dispatch([{ source: 'resume' }]); });
+  pet.on('hide', () => { hiddenByUser = true; sendEffectsState(); });
+  pet.on('show', () => {
+    hiddenByUser = false; lowActivityAt = 0;
+    if (suspended || parkPending) dispatch([{ source: 'resume' }]);
+    sendEffectsState();
+  });
   const back = (reason: string) => { if (absence.back(reason, Date.now(), director.config.interaction.awayMs)) actionRequests.push({ source: 'desktop-return' }); };
   powerMonitor.on('lock-screen', () => absence.leave('lock', Date.now()));
   powerMonitor.on('unlock-screen', () => back('lock'));
@@ -367,7 +386,7 @@ async function setup(): Promise<void> {
   pet.setIgnoreMouseEvents(true, { forward: true });
   ipcMain.on('renderer-ready', event => {
     if (!trusted(event, pet)) return;
-    ready = true; dispatch([{ source: 'startup' }]);
+    ready = true; sendEffectsState(); dispatch([{ source: 'startup' }]);
   });
   ipcMain.on('chat-ready', event => { if (trusted(event, chat)) { chatReady = true; sendChat(); } });
   ipcMain.on('chat-close', event => { if (trusted(event, chat)) chat?.hide(); });
