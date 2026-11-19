@@ -80,6 +80,7 @@ const PC_STATUS = path.join(STATE, 'relay-pc-status');
 function notePcStatus(online) {
   try { fs.writeFileSync(PC_STATUS, JSON.stringify({ online: !!online, at: Date.now() })); } catch (_) {}
   log(`pc peer ${online ? 'online' : 'offline'}`);
+  if (online) { awaitingAck.clear(); flushOutbox(); }
 }
 
 function handleAck(env) {
@@ -99,7 +100,8 @@ function flushOutbox() {
     if (awaitingAck.has(id)) continue;
     let obj;
     try { obj = JSON.parse(fs.readFileSync(path.join(SPOOL_OUT, name), 'utf8')); } catch (_) { continue; }
-    const payload = encrypt(KEY, JSON.stringify({ id: obj.id || id, text: obj.text || '', ts: obj.ts || '' }));
+    const payload = encrypt(KEY, JSON.stringify({ id: obj.id || id, text: obj.text || '', ts: obj.ts || '',
+      animationCategory: obj.animationCategory }));
     if (send({ kind: 'reply', id, payload })) {
       awaitingAck.set(id, name);
       log(`reply ${id} pushed`);

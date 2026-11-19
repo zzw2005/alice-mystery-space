@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { app, BrowserWindow, ipcMain, Menu, nativeImage, powerMonitor, screen, Tray } from 'electron';
 import fs from 'node:fs/promises';
-import { readFileSync } from 'node:fs';
+import { readFileSync, watch, type FSWatcher } from 'node:fs';
 import { RunStats } from './run-stats';
 import { atomicWrite, limits, loadPosition, Position, restore, snap } from './placement';
 import path from 'node:path';
@@ -10,6 +10,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
 import { Absence, Gestures, PointerPress } from './gestures';
 import { Bridge, Message, ReplyQueue } from './bridge';
+import { ChatRelay } from './chat-relay';
 import { Action, ActionRequest, Director, PetConfig, Physics, Presence, validateConfig } from './engine';
 import type { Atmosphere, EffectsState } from '../shared/effects';
 
@@ -36,6 +37,11 @@ let clickTimer: NodeJS.Timeout | undefined, pressTimer: NodeJS.Timeout | undefin
 let lastLoggedAction: Action | undefined;
 const actionRequests: ActionRequest[] = [];
 const replies = new ReplyQueue();
+const relay = new ChatRelay(bridge, () => { sendChat(); pollReplies(); }, reply => {
+  replies.enqueue([reply]); deliverReplies();
+}, report);
+let outboxWatcher: FSWatcher | undefined;
+let pollAgain = false;
 const automaticRequests = [{ source: 'auto-sleep' }, { source: 'random-chain' }] as const;
 let messages: Message[] = [], presenceNote = '在岗', pending = new Map<string, number>();
 let decodedFrames = 0, lastClipToken = 0, totalFrames = 0;
@@ -62,6 +68,9 @@ function report(operation: string, error?: unknown): void {
 }
 const statePath = path.join(root, 'pet-position.json');
 const settingsPath = path.join(root, 'pet-settings.json');
+const chatBoundsPath = path.join(root, 'pet-chat-bounds.json');
+const chatSize = { width: 372, height: 500 };
+const chatMin = { width: 312, height: 320 };
 const clickSoundIntervalMs = 100;
 let settings: { clickSoundEnabled: boolean; effectsEnabled: boolean; atmosphere?: Atmosphere } =
   { clickSoundEnabled: true, effectsEnabled: true };
@@ -92,10 +101,26 @@ function setStanding(enabled: boolean): void {
   standing = enabled; place(enabled ? previous : desktop);
   actionRequests.push({ source: 'placement' }); savePosition(); tray.setContextMenu(menu());
 }
-function followChat(window: BrowserWindow): void {
+function initialChatBounds(): Electron.Rectangle {
   const bounds = pet.getBounds(), a = monitor().workArea;
-  window.setPosition(Math.round(Math.max(a.x, Math.min(a.x + a.width - 372, bounds.x + bounds.width / 2 - 186))),
-    Math.round(Math.max(a.y, Math.min(a.y + a.height - 500, bounds.y - 460))));
+  const fallback = { x: bounds.x + Math.round((bounds.width - chatSize.width) / 2), y: bounds.y - 460, ...chatSize };
+  let saved = fallback, work = a;
+  try {
+    const value = JSON.parse(readFileSync(chatBoundsPath, 'utf8'));
+    if (value && [value.x, value.y, value.width, value.height].every(Number.isSafeInteger)) {
+      const display = screen.getDisplayMatching(value);
+      saved = value; work = display.workArea;
+    }
+  } catch (e) { if ((e as NodeJS.ErrnoException).code !== 'ENOENT') report('chat-bounds-read', e); }
+  const width = Math.min(work.width, Math.max(chatMin.width, saved.width));
+  const height = Math.min(work.height, Math.max(chatMin.height, saved.height));
+  return { x: Math.max(work.x, Math.min(work.x + work.width - width, saved.x)),
+    y: Math.max(work.y, Math.min(work.y + work.height - height, saved.y)), width, height };
+}
+function saveChatBounds(): void {
+  if (!chat || chat.isDestroyed()) return;
+  try { atomicWrite(chatBoundsPath, JSON.stringify(chat.getBounds())); }
+  catch (e) { report('chat-bounds-write', e); }
 }
 function notifyConfig(): void {
   if (tray && configNotice && !configNotified) {
@@ -103,7 +128,7 @@ function notifyConfig(): void {
   }
 }
 function sendChat(): void {
-  if (chatReady && chat) chat.webContents.send('chat-state', { messages: messages.slice(-director.config.tuning.chatRows), note: presenceNote, tuning: director.config.tuning,
+  if (chatReady && chat && !chat.isDestroyed()) chat.webContents.send('chat-state', { messages: messages.slice(-director.config.tuning.chatRows), note: presenceNote, connected: relay.connected, tuning: director.config.tuning,
     pending: [...pending.entries()].map(([id, at]) => ({ id, stage: Date.now() - at < director.config.tuning.pendingThinkMs ? '已收到' : '思考中' })) });
 }
 function dispatch(requests: readonly ActionRequest[], now = Date.now()): void {
@@ -156,6 +181,19 @@ function deliverReplies(): void {
   if (typeof next.animationCategory === 'string') actionRequests.push({ source: 'reply-category', category: next.animationCategory });
   sendChat();
   deliverReplies();
+}
+function pollReplies(): void {
+  if (quitting) return;
+  if (pollRunning) { pollAgain = true; return; }
+  pollRunning = true;
+  bridge.poll().then(batch => {
+    if (quitting) return;
+    replies.enqueue(batch);
+    deliverReplies();
+  }).catch(report.bind(null, 'reply-poll')).finally(() => {
+    pollRunning = false;
+    if (pollAgain) { pollAgain = false; pollReplies(); }
+  });
 }
 function clearClick(): void { clearTimeout(clickTimer); clickTimer = undefined; }
 function samplePress(cursor: Electron.Point, now: number): boolean {
@@ -214,9 +252,9 @@ function finishPress(cursor: Electron.Point, now: number, cancelled: boolean): v
 }
 async function ensureChat(): Promise<BrowserWindow> {
   if (!chat) {
-    chat = new BrowserWindow({ ...windowOptions(), width: 372, height: 500, transparent: true, title: '和艾莉丝说话' });
+    chat = new BrowserWindow({ ...windowOptions(), ...initialChatBounds(), transparent: true, title: '和艾莉丝说话' });
     secureWindow(chat);
-    chat.on('hide', () => director.interact(Date.now()));
+    chat.on('hide', () => { saveChatBounds(); director.interact(Date.now()); });
     chatLoading = chat.loadFile(path.join(ui, 'chat.html'));
   }
   await chatLoading; return chat;
@@ -224,7 +262,6 @@ async function ensureChat(): Promise<BrowserWindow> {
 async function toggleChat(): Promise<void> {
   if (chat?.isVisible()) { chat.hide(); return; }
   const window = await ensureChat();
-  followChat(window);
   window.show(); window.focus(); sendChat();
   interact({ source: 'chat-open' });
 }
@@ -407,9 +444,17 @@ async function setup(): Promise<void> {
   });
   ipcMain.on('chat-ready', event => { if (trusted(event, chat)) { chatReady = true; sendChat(); } });
   ipcMain.on('chat-close', event => { if (trusted(event, chat)) chat?.hide(); });
+  ipcMain.on('chat-resize', (event, width: unknown, height: unknown) => {
+    if (!chat?.isVisible() || !trusted(event, chat) || typeof width !== 'number' || typeof height !== 'number' ||
+        !Number.isSafeInteger(width) || !Number.isSafeInteger(height)) return;
+    const bounds = chat.getBounds(), area = screen.getDisplayMatching(bounds).workArea;
+    chat.setBounds({ ...bounds, width: Math.max(chatMin.width, Math.min(area.x + area.width - bounds.x, width)),
+      height: Math.max(chatMin.height, Math.min(area.y + area.height - bounds.y, height)) });
+  });
   ipcMain.handle('chat-send', async (event, text: unknown) => {
     if (!trusted(event, chat)) throw Error('Invalid sender');
     const msg = await bridge.send(text); messages.push(msg); pending.set(msg.id, Date.now()); sendChat(); interact({ source: 'chat-send' });
+    relay.push(msg);
     return msg.id;
   });
   ipcMain.on('hit', (event, hit: unknown) => {
@@ -537,6 +582,14 @@ async function setup(): Promise<void> {
   });
   screen.on('display-metrics-changed', () => { physics.x = Math.max(area().left, Math.min(area().right, physics.x)); physics.y = Math.min(area().floor, physics.y); });
   startTimers(); await heartbeat();
+  const outbox = path.join(root, 'outbox');
+  try {
+    await fs.mkdir(outbox, { recursive: true });
+    outboxWatcher = watch(outbox, (_type, name) => { if (!name || /^reply-[\w-]+\.json$/.test(name)) pollReplies(); });
+    outboxWatcher.on('error', e => { report('outbox-watch', e); outboxWatcher?.close(); outboxWatcher = undefined; });
+  } catch (e) { report('outbox-watch', e); }
+  pollReplies();
+  relay.start();
   if (testMode) {
     Object.assign(globalThis, { aliceTest: {
       tuning: () => director.config.tuning,
@@ -600,7 +653,6 @@ function startTimers(): void {
       // Round-tripping native bounds through setPosition grows the window on fractional DPI.
       pet.setBounds({ x, y, ...petSize });
       windowX = x; windowY = y;
-      if (chat?.isVisible()) followChat(chat);
     }
     const pose = { x: cursor.x - x, y: cursor.y - y, squash: physics.squash, direction: director.current.kind === 'peek' ? gestures.direction : physics.direction,
       tilt: physics.mode === 'drag' && press?.state === 'drag' ? Math.max(-1, Math.min(1, physics.vx / cfg.dragTiltSpeed)) * cfg.dragTiltDegrees : 0, dragging: physics.mode === 'drag', heightAbove: Math.max(0, bounds.floor - y) };
@@ -615,12 +667,11 @@ function startTimers(): void {
     else if (!lowActivityAt) lowActivityAt = Date.now();
     else if (Date.now() - lowActivityAt >= tuning.decoderReleaseMs) parkPlayback();
   }, tuning.maintenanceMs));
-  timers.push(setInterval(() => { if (!pollRunning) { pollRunning = true; bridge.poll().then(batch => {
-    replies.enqueue(batch);
-    deliverReplies();
+  timers.push(setInterval(() => {
+    if (!relay.connected || !outboxWatcher) pollReplies();
     for (const [id, at] of pending) if (Date.now() - at > tuning.replyTimeoutMs) pending.delete(id);
     sendChat();
-  }).catch(report.bind(null, 'reply-poll')).finally(() => { pollRunning = false; }); } }, tuning.replyPollMs));
+  }, tuning.replyPollMs));
   timers.push(setInterval(() => { if (!statusRunning) { statusRunning = true; statusTick().catch(report.bind(null, 'status-poll')).finally(() => { statusRunning = false; }); } }, tuning.statusPollMs));
   timers.push(setInterval(() => {
     const sample = memorySample(app.getAppMetrics());
@@ -650,7 +701,8 @@ async function statusTick(): Promise<void> {
   } catch (e) { if ((e as NodeJS.ErrnoException).code !== 'ENOENT' && !(e instanceof SyntaxError)) report('presence-read', e); }
   actionRequests.push({ source: 'presence', state, valid });
   await healthTick();
-  tray.setToolTip(((healthWarning ? '⚠ 每日自检异常 · ' : '') + '艾莉丝 · ' + presenceNote).slice(0, 120)); sendChat();
+  tray.setToolTip(((healthWarning ? '⚠ 每日自检异常 · ' : '') + '艾莉丝 · ' + presenceNote.slice(0, 80) +
+    ' · ' + (relay.connected ? '已连接' : '重连中')).slice(0, 120)); sendChat();
   const stat = await fs.stat(configPath).catch(e => { if (e.code === 'ENOENT') return undefined; throw e; });
   if (stat?.mtimeMs !== configStamp) await loadConfig();
 }
@@ -714,6 +766,7 @@ else {
   app.on('second-instance', () => { if (pet) { if (pet.isMinimized()) pet.restore(); pet.show(); pet.focus(); } });
   app.on('before-quit', () => {
     quitting = true; clearClick(); clearTimeout(pressTimer); clearTimeout(replyTimer);
+    saveChatBounds(); outboxWatcher?.close(); relay.stop();
     if (pet && desktop) { savePosition(); writeStats(false); }
     timers.forEach(clearInterval);
   });

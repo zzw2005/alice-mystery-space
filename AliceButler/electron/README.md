@@ -59,7 +59,9 @@ node tests/deployed-nine-clip-smoke.cjs
 
 ## 聊天与进程
 
-桌宠写 inbox，外部钩子读；外部钩子写 outbox，桌宠读，格式与旧 PROTOCOL 一致。所有渲染器 Node 禁用、contextIsolation/sandbox 开启，只暴露固定 IPC；新窗口和导航禁止，文本以 textContent 显示。
+桌宠主进程通过现有 `/pet-relay` WSS 直推 AES-256-GCM 消息，沿用文件桥格式和 id。发送先写 inbox 留底，收到对端 ACK 后归档到 seen；断线自动重连并继续轮询 outbox，未确认发送可由旧钩子接管。双路回复共用 outbox/seen 去重。现有管家中继的切换与配置见 [中继说明](../../relay/README.md)。
+
+聊天顶栏显示 presence 与中继状态。拖动顶栏移动窗口，拖动右下角或聚焦后按方向键调整大小。关闭时保存窗口位置和尺寸，并保留本次运行的聊天记录。所有渲染器 Node 禁用、contextIsolation/sandbox 开启，只暴露固定 IPC；新窗口和导航禁止，文本以 textContent 显示。
 
 presence 文件每 2 秒读取，12 分钟过期。thinking/working/result/waiting 循环；success/error 每次进入仅一次。睡眠期间不受 presence 打断，提前叫醒先完成入睡段再播醒来段。heartbeat 每 30 秒；托盘主动退出写 pet-disabled.flag；自启沿用 AlicePetLaunch。
 

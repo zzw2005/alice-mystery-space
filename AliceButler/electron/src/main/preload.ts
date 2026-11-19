@@ -28,5 +28,6 @@ contextBridge.exposeInMainWorld('alice', {
   videoError: (text: string, token?: number) => ipcRenderer.send('video-error', text, token),
   frames: (count: number) => ipcRenderer.send('frame', count),
   closeChat: () => ipcRenderer.send('chat-close'),
+  resizeChat: (width: number, height: number) => ipcRenderer.send('chat-resize', width, height),
   send: (text: string) => ipcRenderer.invoke('chat-send', text)
 });

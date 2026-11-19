@@ -1,15 +1,15 @@
 # 桌宠聊天中继（pet-relay）
 
-2026-11-19 上线，替代 SSH 文件轮询成为桌宠聊天的主通道；原文件桥保留作自动回退。
+2026-11-19 上线，替代 SSH 文件轮询成为桌宠聊天的主通道；原文件桥保留作自动回退。同日 Electron 接入现有中继协议，PC 端可由桌宠主进程直连。
 
 ## 架构
 
 ```
-桌宠(PC) → AliceButler/inbox → relay-client.js(PC, 管家服务)
+桌宠 Electron 主进程（AliceButler/inbox 保留未确认消息）
    → WSS 长连接 → 中继 relay-server.js（gzmaoxing 服务器, 127.0.0.1:7311, nginx /pet-relay 反代）
    → WSS 长连接 → vm-client.js（艾莉丝 VM, systemd alice-relay-client）
    → ~/hooks/state/relay-spool/ → pet-inbox 钩子（5 秒轮询本地 spool）唤醒回复
-回复原路返回：pet-reply.sh → ~/hooks/state/relay-outbox/ → vm-client 推送 → 中继 → relay-client 落 PC outbox（原子 rename）→ 桌宠显示
+回复原路返回：pet-reply.sh → ~/hooks/state/relay-outbox/ → vm-client 推送 → 中继 → Electron 归档到 outbox/seen 并显示
 ```
 
 - 内容全程端到端加密（AES-256-GCM，crypto.js）；中继只转发密文，只做令牌鉴权与离线队列（queue.json，上限 200 条、24 小时）。
@@ -26,7 +26,8 @@
 
 - 服务器：/opt/alice-relay（relay-server.js + node_modules），系统用户 petrelay，服务 alice-pet-relay.service；nginx 改动记 SERVER-FIXES 第 32 条。重部署＝把本目录 relay-server.js 与 node_modules 同步过去后 systemctl restart alice-pet-relay。
 - VM：服务 alice-relay-client.service（unit 副本在 ~/workspace/pet-relay/）；VM 被替换后重装：cp unit 到 /etc/systemd/system、daemon-reload、enable --now（proxy.env 与 config.json 在持久主目录里，不会丢）。
-- PC：AliceButler/relay-client.js 以管家 service 任务运行（id relay-client）；同目录需 relay-client-config.json 与 relay-key.txt（部署时经 SSH 直接写入，不入仓，见 .gitignore）。
+- PC：Electron 从运行根目录读取 `relay-client-config.json` 和其中指定的密钥文件，默认 `relay-key.txt`。文件需允许桌宠登录用户读取。上线切换时，通过管家既有停止任务流程停止 `relay-client`，确认 `running/relay-client.job.json` 已消失。此前 Electron 继续使用文件桥，避免争抢中继唯一的 PC 槽位。
+- VM 与回复工具：同步 `vm-client.js` 和 `tools/pet-reply.sh`。在线时回复原子写入 VM spool，PC 离线时走原 SSH 投递。PC 重连后，VM 补发仍未获确认的回复。
 
 ## 实测（2026-11-19）
 

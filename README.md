@@ -311,5 +311,5 @@ encode_thumbs.py      →  step04/（转成 640×360 WebM）
 
 - 动画纪律：UI 动效 ≤300ms、只用 transform/opacity 类手段；动作切换有 180ms 交叉淡化（pet.Render.cs 的 PresentFrame），别退回硬切。
 - 帧解码走后台线程＋环形缓存（ClipCache），别在 UI 线程同步解码整段。
-- 聊天桥：桌宠写 inbox → 外部钩子唤醒回复 → 回复必须经 `tools/pet-reply.sh` 原子投递到 outbox。
+- 聊天桥：Electron 经 `/pet-relay` 加密直推，断线期间由 inbox/outbox 文件桥接管。回复经 `tools/pet-reply.sh` 原子投递。现有管家中继迁移见 [聊天中继说明](relay/README.md)。
 - 改完必验：部署冒烟回执 exitCode 0 才算数；动画素材改动后回读 pet-stats.json 对比 tickMax / diskLoads。

@@ -37,3 +37,4 @@ status.json 的 events 带 seq 与 runnerSince；桌宠以 (runnerSince, seq) �
 
 - inbox/ 与 outbox/ 的文件协议不变；新增 relay-client.js（管家 service）把 inbox 新消息经服务器中继（WSS＋端到端加密）即时推给艾莉丝，收到 ack 后把原件移入 inbox/seen/（与钩子消费的终态一致）。中继不可达时文件留 inbox/，旧钩子 SSH 拉取自动接管。
 - outbox/ 回复多一条来源：relay-client 收到中继回复后按同样的临时名→rename 规范落 reply-<id>.json 并回 ack；桌宠消费逻辑与去重不变。
+- Electron 直连使用同一套信封和文件格式。inbox 原件保留到对端 ack，直连回复先原子归档到 outbox/seen，再回 ack 和显示。文件回复与直连回复以同一个 seen 文件去重。PC 连接切换见 [中继说明](../relay/README.md)。
