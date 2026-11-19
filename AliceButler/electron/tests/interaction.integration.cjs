@@ -372,7 +372,7 @@ test('Electron skips damaged media and restores a broken config with one notific
     assert.deepEqual(copies.map(copy => JSON.parse(copy).reason).sort(), ['failed', 'invalid-json']);
 
     await fs.copyFile(path.join(source, 'media/wave.webm'), path.join(appPath, 'media/wave.webm'));
-    await app.evaluate(() => global.aliceTest.menu().items.find(item => item.label === '重载动作配置').click());
+    await fs.writeFile(file, await fs.readFile(file, 'utf8')); // mtime bump: config reloads on change
     await waitFor(async () => (await triggers()).filter(event => event.source === 'config-reload').length >= 3);
     await app.evaluate(() => global.aliceTest.play('wave'));
     await waitClip(pet, 'wave', 'test');

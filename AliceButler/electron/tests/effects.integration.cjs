@@ -35,7 +35,7 @@ test('WebGL effects cap simultaneous particles, stop when empty and persist the 
     for (let i = 0; i < 100 && !await app.evaluate(() => Boolean(global.aliceTest)); i++) await delay(20);
     return pet;
   };
-  const enabled = app => app.evaluate(() => global.aliceTest.menu().items.find(item => item.label === '特效').checked);
+  const enabled = async () => JSON.parse(await fs.readFile(settingsPath)).effectsEnabled !== false;
   const show = app => app.evaluate(() => global.aliceTest.show());
   let app;
   try {
@@ -43,7 +43,7 @@ test('WebGL effects cap simultaneous particles, stop when empty and persist the 
     const pet = await find(app);
     const errors = [];
     pet.on('pageerror', error => errors.push(error.message));
-    assert.equal(await enabled(app), true, 'legacy settings default to effects on');
+    assert.equal(await enabled(), true, 'legacy settings default to effects on');
     assert.equal(await pet.locator('#effects canvas').count(), 0, 'hidden launch is lazy');
     await pet.evaluate(() => {
       const proto = WebGL2RenderingContext.prototype;
@@ -97,8 +97,7 @@ test('WebGL effects cap simultaneous particles, stop when empty and persist the 
     assert.equal((await layer()).maxInstances, 120);
 
     config.effects.atmosphere = 'off';
-    await fs.writeFile(configPath, JSON.stringify(config));
-    await app.evaluate(() => global.aliceTest.menu().items.find(item => item.label === '重载动作配置').click());
+    await fs.writeFile(configPath, JSON.stringify(config)); // mtime bump: config reloads on change
     await pet.waitForFunction(() => document.querySelector('#effects').dataset.particles === '0');
     const empty = await layer();
     await play('doze');
@@ -109,14 +108,17 @@ test('WebGL effects cap simultaneous particles, stop when empty and persist the 
     await play('clickshy');
     assert.ok(Number((await layer()).particles) > 0, 'an action renews drawing with atmosphere off');
 
-    await app.evaluate(() => global.aliceTest.menu().items.find(item => item.label === '氛围粒子')
-      .submenu.items.find(item => item.label === '浮光').click());
-    await pet.waitForFunction(() => document.querySelector('#effects').dataset.ambient === 'glow');
-    await app.evaluate(() => global.aliceTest.menu().items.find(item => item.label === '特效').click());
-    assert.equal(await enabled(app), false);
-    assert.deepEqual(JSON.parse(await fs.readFile(settingsPath)), { clickSoundEnabled: false, effectsEnabled: false, atmosphere: 'glow' });
-    await pet.waitForFunction(() => !document.querySelector('#effects canvas'));
     assert.deepEqual(errors, []);
+    await app.close();
+    app = undefined;
+    // The menu keeps only core items now: atmosphere and the effects switch
+    // are read from pet-settings.json at startup instead.
+    await fs.writeFile(settingsPath, JSON.stringify({ clickSoundEnabled: false, effectsEnabled: false, atmosphere: 'glow' }));
+    app = await launch();
+    const offPet = await find(app);
+    await show(app);
+    assert.equal(await enabled(), false);
+    assert.equal(await offPet.locator('#effects canvas').count(), 0, 'effects off creates no canvas');
     await app.close();
     app = undefined;
     config.effects.atmosphere = 'snow';
@@ -124,14 +126,19 @@ test('WebGL effects cap simultaneous particles, stop when empty and persist the 
     app = await launch();
     const restarted = await find(app);
     await show(app);
-    assert.equal(await enabled(app), false);
+    assert.equal(await enabled(), false, 'effects off persists across restart');
     const token = await app.evaluate(() => global.aliceTest.play('rage'));
     await restarted.waitForFunction(t => document.querySelector('#actor').dataset.token === String(t), token);
     await delay(200);
     assert.equal(await restarted.locator('#effects canvas').count(), 0);
-    await app.evaluate(() => global.aliceTest.menu().items.find(item => item.label === '特效').click());
-    await restarted.waitForFunction(() => document.querySelector('#effects').dataset.renderer === 'webgl2');
-    assert.equal(await restarted.locator('#effects').getAttribute('data-ambient'), 'glow');
+    await app.close();
+    app = undefined;
+    await fs.writeFile(settingsPath, JSON.stringify({ clickSoundEnabled: false, effectsEnabled: true, atmosphere: 'glow' }));
+    app = await launch();
+    const enabledPet = await find(app);
+    await show(app);
+    await enabledPet.waitForFunction(() => document.querySelector('#effects').dataset.renderer === 'webgl2');
+    assert.equal(await enabledPet.locator('#effects').getAttribute('data-ambient'), 'glow');
     assert.deepEqual(JSON.parse(await fs.readFile(settingsPath)), { clickSoundEnabled: false, effectsEnabled: true, atmosphere: 'glow' });
     t.diagnostic(JSON.stringify({ maxParticles: 120, snow: 48, dream: 10, dpr: snow.dpr,
       renderResolution: snow.width / snow.logicalWidth, gpuPixels: snow.alphaPixels, persisted: true }));

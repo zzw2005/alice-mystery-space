@@ -282,7 +282,6 @@ const actionLabels = new Map(Object.entries({
   rainstand: '雨中伫立'
 }));
 function menu(): Menu {
-  const atmospheres = { off: '关闭', glow: '浮光', snow: '落雪' } as const;
   const clips = director.manualClips;
   const actionItems = clips.map(clip => ({
     label: actionLabels.get(clip) ?? clip,
@@ -297,18 +296,8 @@ function menu(): Menu {
     { label: director?.rest === 'awake' ? '睡一会儿' : '起来', click: () => {
       interact({ source: director.rest === 'awake' ? 'menu-sleep' : 'menu-wake' });
     } },
-    { label: '任务栏站立', type: 'checkbox', checked: standing, click: item => setStanding(item.checked) },
     { label: '点击音效', type: 'checkbox', checked: settings.clickSoundEnabled, click: item => setSetting('clickSoundEnabled', item.checked) },
-    { label: '特效', type: 'checkbox', checked: settings.effectsEnabled, click: item => setSetting('effectsEnabled', item.checked) },
-    { label: '氛围粒子', submenu: (Object.keys(atmospheres) as Atmosphere[]).map(mode => ({
-      label: atmospheres[mode], type: 'radio', checked: mode === (settings.atmosphere ?? director.config.effects.atmosphere),
-      click: () => setSetting('atmosphere', mode)
-    })) },
-    { label: '跳一下', click: () => { finishPress(screen.getCursorScreenPoint(), Date.now(), true); physics.mode = 'air'; physics.vy = -330; physics.vx = 0; } },
-    { label: '回到原位', click: () => { finishPress(screen.getCursorScreenPoint(), Date.now(), true); physics.mode = 'idle'; physics.x = area().right - director.config.tuning.homeInsetPx; physics.y = area().floor; } },
     { label: pet?.isVisible() ? '隐藏桌宠' : '显示桌宠', click: () => pet.isVisible() ? pet.hide() : pet.showInactive() },
-    { label: '回滚上一版', enabled: backups.length > 0, submenu: backups.map(id => ({ label: id, click: () => rollback(id) })) },
-    { label: '重载动作配置', click: () => loadConfig().catch(report.bind(null, 'config-reload')) },
     { type: 'separator' }, { label: '退出桌宠', click: () => purposefulExit().catch(report.bind(null, 'disable-pet')) }
   ]);
 }

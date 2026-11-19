@@ -83,12 +83,6 @@ async function smoke({ executable, source, clips: requested, checkUi = false }) 
       await fs.writeFile(reply + '.tmp', JSON.stringify({ id, text: '回执已读' }));
       await fs.rename(reply + '.tmp', reply);
       await chat.getByText('回执已读', { exact: true }).waitFor();
-      if (!await app.evaluate(() => {
-        const toggle = () => global.aliceTest.menu().items.find(i => i.label === '任务栏站立').click();
-        const initial = global.aliceTest.state().standing;
-        toggle(); const changed = global.aliceTest.state().standing !== initial;
-        toggle(); return changed && global.aliceTest.state().standing === initial;
-      })) throw Error('Tray toggle failed');
     }
     const result = {
       runtime: 'Electron',
