@@ -100,7 +100,9 @@ wss.on('connection', (ws, req) => {
   ws.isAlive = true;
   ws.on('pong', () => { ws.isAlive = true; });
   console.log(`[${new Date().toISOString()}] ${role} connected`);
-  ws.send(JSON.stringify({ kind: 'hello', role }));
+  const other = role === 'pc' ? 'alice' : 'pc';
+  ws.send(JSON.stringify({ kind: 'hello', role, peerOnline: !!peers[other] }));
+  sendTo(other, { kind: 'peer', role, online: true });
   flushQueue(role);
 
   ws.on('message', (data) => {
@@ -122,7 +124,13 @@ wss.on('connection', (ws, req) => {
     }
   });
 
-  const drop = () => { if (peers[role] === ws) peers[role] = null; console.log(`[${new Date().toISOString()}] ${role} disconnected`); };
+  const drop = () => {
+    if (peers[role] === ws) {
+      peers[role] = null;
+      sendTo(role === 'pc' ? 'alice' : 'pc', { kind: 'peer', role, online: false });
+    }
+    console.log(`[${new Date().toISOString()}] ${role} disconnected`);
+  };
   ws.on('close', drop);
   ws.on('error', drop);
 });

@@ -76,6 +76,12 @@ function handleMsg(env) {
   log(`spooled msg ${obj.id}`);
 }
 
+const PC_STATUS = path.join(STATE, 'relay-pc-status');
+function notePcStatus(online) {
+  try { fs.writeFileSync(PC_STATUS, JSON.stringify({ online: !!online, at: Date.now() })); } catch (_) {}
+  log(`pc peer ${online ? 'online' : 'offline'}`);
+}
+
 function handleAck(env) {
   const name = awaitingAck.get(env.id);
   if (!name) return;
@@ -120,6 +126,8 @@ function connect() {
     try { env = JSON.parse(data.toString()); } catch (_) { return; }
     if (env.kind === 'msg') handleMsg(env);
     else if (env.kind === 'ack') handleAck(env);
+    else if (env.kind === 'peer' && env.role === 'pc') notePcStatus(env.online);
+    else if (env.kind === 'hello') notePcStatus(env.peerOnline);
   });
   const retry = () => {
     if (!connected && ws && ws.readyState !== WebSocket.OPEN) { /* fallthrough */ }

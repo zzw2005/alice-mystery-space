@@ -18,7 +18,7 @@
 
 ## 回退与自愈
 
-- vm-client 每 20 秒刷 ~/hooks/state/relay-heartbeat；钩子发现心跳过期（>90 秒）且 spool 为空时，自动 exec 旧脚本 pet-inbox.sh 走 SSH 拉取——中继全挂聊天也不断，只是变慢。
+- vm-client 每 20 秒刷 ~/hooks/state/relay-heartbeat，并把 PC 端在中继上的在线状态记入 relay-pc-status；钩子只在「心跳新鲜＋PC 在线」时静默，其余情况（中继挂、或 PC 端还没接上中继）自动 exec 旧脚本 pet-inbox.sh 走 SSH 拉取——任何一环没接上，聊天都不耽误，只是变慢。
 - pet-reply.sh 同理：心跳新鲜走 spool，过期直接走旧 SSH 原子投递。两条路同 id、桌宠按 id 去重，双投无害。
 - 三端均自动重连（退避 1s→30s）；中继离线队列在任一端重连后按序补投；PC 端收到 ack 才把 inbox 原件移入 seen，未 ack 的消息一直留在 inbox，钩子回退路径也能捞到。
 
