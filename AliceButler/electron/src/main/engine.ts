@@ -12,11 +12,10 @@ type WakeSource = 'pointer-wake' | 'chat-open' | 'chat-send' | 'chat-reply' | 'm
 type SimpleSource = WakeSource | 'startup' | 'resume' | 'media-fallback' | 'animation-end' | 'placement' |
   'config-reload' | 'hover-exit' | 'drag-release' | 'walk-end' | 'drag' | 'menu-sleep' | 'double-click' |
   'desktop-return' | 'landing' | 'hover-peek' | 'click-startle' | 'click-combo' | 'auto-sleep' | 'random-chain' |
-  'long-press';
+  'long-press' | 'click';
 export type ActionRequest = { source: SimpleSource } |
   { source: 'presence'; state: Presence; valid: boolean } |
   { source: 'reply-category'; category: string } |
-  { source: 'click'; dismissPeek?: boolean } |
   { source: 'long-press-release'; cancelled?: boolean } |
   { source: 'test'; action: Action | 'sleep' | 'wake' };
 type Source = ActionRequest['source'];
@@ -54,7 +53,7 @@ export interface PetConfig {
   };
   animationWeights: { idle: number; turn: number; moves: number };
   idleSeconds: [number, number];
-  clips: Record<string, { file: string; facing?: 'left' | 'right'; provisional?: boolean; skin?: Skin; endsClosed?: boolean }>;
+  clips: Record<string, { file: string; facing?: 'left' | 'right'; provisional?: boolean; skin?: Skin; endsClosed?: boolean; startOffset?: number }>;
   skinTransition?: SkinTransitions;
 }
 const states = ['thinking', 'working', 'result', 'waiting', 'success', 'error'] as const;
@@ -71,6 +70,8 @@ export function validateConfig(input: unknown): PetConfig {
     if (!/^[a-z][a-z0-9-]*$/.test(id) || !/^[a-z][a-z0-9-]*\.webm$/.test(clip.file)) throw Error('Unsafe clip path');
     if (clip.skin !== undefined && clip.skin !== 'uniform' && clip.skin !== 'wafuku') throw Error('Invalid clip skin');
     if (clip.endsClosed !== undefined && typeof clip.endsClosed !== 'boolean') throw Error('Invalid clip ending');
+    if (clip.startOffset !== undefined && (!Number.isFinite(clip.startOffset) || clip.startOffset < 0))
+      throw Error('Invalid clip start offset');
   }
   const { reactions, categories, events, moves } = c.animations;
   const pools = [c.animations.idle, c.animations.turn, c.animations.drag, c.animations.clicks,
@@ -219,7 +220,7 @@ export class Director {
       case 'drag-release':
       case 'walk-end': return this.commit(this.base(), source);
       case 'hover-exit': return kind === 'peek' ? this.commit(this.base(), source) : rejected;
-      case 'click': return this.commit(request.dismissPeek ? (kind === 'peek' ? this.base() : undefined) : this.reaction('clicks'), source);
+      case 'click': return this.commit(this.reaction('clicks'), source);
       case 'click-combo':
         this.last.set('clicks', 'clicktsun');
         return this.commit(action('clicktsun', false, 'clicks'), source);

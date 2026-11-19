@@ -112,6 +112,74 @@ function videoRate(pet) {
   });
 }
 
+test('Electron squashes on pointerdown, restarts on a second press and presents warmed click video while held', async t => {
+  await withPet(t, async ({ app, pet, state }) => {
+    const point = { x: 272, y: 177 };
+    await app.evaluate(({ BrowserWindow, screen }, point) => {
+      const window = BrowserWindow.getAllWindows()[0];
+      screen.getCursorScreenPoint = () => {
+        const { x, y } = window.getBounds();
+        return { x: x + point.x, y: y + point.y };
+      };
+      window.showInactive();
+    }, point);
+    await waitFor(async () => !(await state()).ignoringMouse);
+    await delay(config.interaction.approachWindowMs);
+    await pet.evaluate(() => {
+      const actor = document.querySelector('#actor');
+      window.clickSamples = [];
+      let current;
+      let reboundRunning;
+      actor.addEventListener('pointerdown', () => {
+        reboundRunning = actor.getAnimations().some(animation => animation.playState === 'running');
+      }, { capture: true });
+      actor.addEventListener('pointerdown', () => {
+        const animation = actor.getAnimations()[0];
+        current = { at: performance.now(), scale: getComputedStyle(actor).scale, previousCancelled:
+          window.previousRebound?.playState === 'idle', duration: animation?.effect.getTiming().duration, reboundRunning };
+        window.previousRebound = animation;
+        window.clickSamples.push(current);
+      });
+      actor.addEventListener('pointerup', () => { current.released = true; });
+      new MutationObserver(() => {
+        if (!current || current.firstFrame || actor.dataset.kind !== 'clicks') return;
+        const video = [...actor.querySelectorAll('video')].find(video => video.style.opacity === '1');
+        current.firstFrame = {
+          ms: performance.now() - current.at, mediaTime: video.currentTime, clip: actor.dataset.clip,
+          warmed: video.src.startsWith('blob:'), whileHeld: !current.released
+        };
+      }).observe(actor, { attributeFilter: ['data-token'] });
+    });
+    await pet.mouse.move(point.x, point.y);
+    for (let i = 0; i < 2; i++) {
+      await pet.mouse.down();
+      await pet.waitForFunction(i => window.clickSamples[i]?.firstFrame, i);
+      await pet.mouse.up();
+    }
+    const samples = await pet.evaluate(() => window.clickSamples);
+    for (const { scale, duration, firstFrame } of samples) {
+      const [x, y] = scale.split(' ').map(Number);
+      assert.ok(Math.abs(x - 1.06) < .015 && Math.abs(y - .82) < .04, scale);
+      assert.equal(duration, 200);
+      assert.ok(firstFrame.whileHeld && firstFrame.warmed && firstFrame.ms <= 200, JSON.stringify(firstFrame));
+      const offset = config.clips[firstFrame.clip].startOffset;
+      assert.ok(firstFrame.mediaTime >= offset - .005 && firstFrame.mediaTime < offset + .18, JSON.stringify(firstFrame));
+    }
+    assert.equal(samples[1].previousCancelled, true);
+    assert.notEqual(samples[0].firstFrame.clip, samples[1].firstFrame.clip);
+    await pet.mouse.down();
+    await pet.mouse.up();
+    await pet.mouse.down();
+    assert.equal(await pet.evaluate(() => window.clickSamples[3].reboundRunning && window.clickSamples[3].previousCancelled), true);
+    await pet.mouse.move(point.x + config.tuning.dragDistancePx, point.y);
+    assert.equal(await pet.evaluate(() => window.previousRebound.playState !== 'idle'), true);
+    await pet.mouse.move(point.x + config.tuning.dragDistancePx + 1, point.y);
+    assert.equal(await pet.evaluate(() => window.previousRebound.playState), 'idle');
+    await pet.mouse.up();
+    t.diagnostic(JSON.stringify(samples.map(sample => sample.firstFrame)));
+  });
+});
+
 test('Electron closes eyes for wardrobe changes and a real click supersedes the pending action', async t => {
   await withPet(t, async ({ app, pet, root, stats }) => {
     await app.evaluate(({ BrowserWindow, screen }) => {
@@ -180,7 +248,7 @@ test('Electron closes eyes for wardrobe changes and a real click supersedes the 
     await pet.waitForFunction(() => window.duckPlays.length === 1);
     await pet.waitForFunction(() => document.querySelector('#actor').dataset.kind === 'clicks', null, { timeout: 2000 });
     const counts = Object.values((await stats()).days).map(day => day.cancelled?.superseded ?? 0);
-    assert.equal(counts.at(-1), 1);
+    assert.equal(counts.at(-1), 2, 'both the pending wardrobe action and the first press were superseded');
 
     const firstClickToken = await pet.locator('#actor').getAttribute('data-token');
     await pointer(pet, 'down');

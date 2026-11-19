@@ -3,6 +3,19 @@ const assert = require('node:assert/strict');
 const config = require('../config.json');
 const { Director, Physics, validateConfig } = require('../dist/main/engine');
 
+test('click offsets are present in both shipped configs and optional in older configs', () => {
+  for (const preset of [config, require('../defaults.json')]) {
+    const parsed = validateConfig(preset);
+    for (const { clip } of parsed.animations.clicks) assert.ok(parsed.clips[clip].startOffset > 0, clip);
+  }
+  const legacy = structuredClone(config);
+  delete legacy.clips.clickhappy.startOffset;
+  assert.equal(validateConfig(legacy).clips.clickhappy.startOffset, undefined);
+  for (const startOffset of [-1, Infinity, '0.5']) {
+    legacy.clips.clickhappy.startOffset = startOffset;
+    assert.throws(() => validateConfig(legacy), /Invalid clip start offset/);
+  }
+});
 const context = (now = 0, motion = 'idle', chatOpen = false) => ({ now, motion, chatOpen });
 function play(director, source, now, motion) {
   return director.request([{ source }], context(now, motion))[0].action ?? null;

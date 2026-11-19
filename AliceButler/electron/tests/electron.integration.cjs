@@ -66,7 +66,7 @@ const assert = require('node:assert/strict');
     await app.evaluate(() => global.aliceTest.sleep());
     await pet.waitForFunction(() => document.querySelector('#actor').dataset.clip === 'doze', null, { timeout: 16000 });
     assert.equal((await app.evaluate(() => global.aliceTest.state())).rest, 'asleep');
-    await app.evaluate(() => global.aliceTest.wake());
+    await pet.evaluate(() => { window.alice.pointer('down'); window.alice.pointer('up'); });
     await pet.waitForFunction(() => document.querySelector('#actor').dataset.clip === 'wakeup');
     await pet.waitForFunction(() => document.querySelector('#actor').dataset.kind === 'idle', null, { timeout: 16000 });
     assert.equal((await app.evaluate(() => global.aliceTest.state())).rest, 'awake');

@@ -101,14 +101,20 @@ test('WebGL effects cap simultaneous particles, stop when empty and persist the 
     await app.evaluate(() => global.aliceTest.menu().items.find(item => item.label === '重载动作配置').click());
     await pet.waitForFunction(() => document.querySelector('#effects').dataset.particles === '0');
     const empty = await layer();
+    await play('doze');
+    assert.equal((await layer()).ambient, 'off');
+    assert.equal(Number((await layer()).particles), 0, 'off also disables dream particles');
     await delay(220);
     assert.equal((await layer()).draws, empty.draws, 'empty effects layer stops GPU draws');
     await play('clickshy');
     assert.ok(Number((await layer()).particles) > 0, 'an action renews drawing with atmosphere off');
 
+    await app.evaluate(() => global.aliceTest.menu().items.find(item => item.label === '氛围粒子')
+      .submenu.items.find(item => item.label === '浮光').click());
+    await pet.waitForFunction(() => document.querySelector('#effects').dataset.ambient === 'glow');
     await app.evaluate(() => global.aliceTest.menu().items.find(item => item.label === '特效').click());
     assert.equal(await enabled(app), false);
-    assert.deepEqual(JSON.parse(await fs.readFile(settingsPath)), { clickSoundEnabled: false, effectsEnabled: false });
+    assert.deepEqual(JSON.parse(await fs.readFile(settingsPath)), { clickSoundEnabled: false, effectsEnabled: false, atmosphere: 'glow' });
     await pet.waitForFunction(() => !document.querySelector('#effects canvas'));
     assert.deepEqual(errors, []);
     await app.close();
@@ -125,7 +131,8 @@ test('WebGL effects cap simultaneous particles, stop when empty and persist the 
     assert.equal(await restarted.locator('#effects canvas').count(), 0);
     await app.evaluate(() => global.aliceTest.menu().items.find(item => item.label === '特效').click());
     await restarted.waitForFunction(() => document.querySelector('#effects').dataset.renderer === 'webgl2');
-    assert.deepEqual(JSON.parse(await fs.readFile(settingsPath)), { clickSoundEnabled: false, effectsEnabled: true });
+    assert.equal(await restarted.locator('#effects').getAttribute('data-ambient'), 'glow');
+    assert.deepEqual(JSON.parse(await fs.readFile(settingsPath)), { clickSoundEnabled: false, effectsEnabled: true, atmosphere: 'glow' });
     t.diagnostic(JSON.stringify({ maxParticles: 120, snow: 48, dream: 10, dpr: snow.dpr,
       renderResolution: snow.width / snow.logicalWidth, gpuPixels: snow.alphaPixels, persisted: true }));
   } finally {

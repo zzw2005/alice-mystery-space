@@ -10,8 +10,8 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
 import { Absence, Gestures, PointerPress } from './gestures';
 import { Bridge, Message, ReplyQueue } from './bridge';
-import { Action, ActionRequest, Director, Physics, Presence, validateConfig } from './engine';
-import type { EffectsState } from '../shared/effects';
+import { Action, ActionRequest, Director, PetConfig, Physics, Presence, validateConfig } from './engine';
+import type { Atmosphere, EffectsState } from '../shared/effects';
 
 const launchAt = performance.now();
 // Preserve Chromium's current default until the target Windows A/B is accepted.
@@ -29,6 +29,7 @@ let pet: BrowserWindow, chat: BrowserWindow | undefined, tray: Tray, director: D
 let chatLoading: Promise<void> | undefined, startupMs: number | null = null;
 let suspended = false, lowActivityAt = 0, parkPending = false, hiddenByUser = false;
 let chatReady = false, ready = false, quitting = false, videoReady = false;
+let clickMediaReady: Promise<void>;
 let dragOffset = { x: 0, y: 0 }, press: PointerPress | undefined, lastMovedAt = 0;
 let doubleAllowed = true;
 let clickTimer: NodeJS.Timeout | undefined, pressTimer: NodeJS.Timeout | undefined, replyTimer: NodeJS.Timeout | undefined;
@@ -62,11 +63,11 @@ function report(operation: string, error?: unknown): void {
 const statePath = path.join(root, 'pet-position.json');
 const settingsPath = path.join(root, 'pet-settings.json');
 const clickSoundIntervalMs = 100;
-let settings = { clickSoundEnabled: true, effectsEnabled: true };
+let settings: { clickSoundEnabled: boolean; effectsEnabled: boolean; atmosphere?: Atmosphere } =
+  { clickSoundEnabled: true, effectsEnabled: true };
 let lastClickSoundAt = -Infinity;
 let standing = false, desktop: Position, lastSaved = '';
 const gestures = new Gestures(), absence = new Absence();
-let approached = false;
 let configNotice = '', configNotified = false;
 function monitor() {
   const point = physics.mode === 'drag' ? screen.getCursorScreenPoint() : { x: Math.round(physics.x + 266), y: Math.round(physics.y + 150) };
@@ -129,6 +130,7 @@ function dispatch(requests: readonly ActionRequest[], now = Date.now()): void {
     videoReady = false;
     pet.webContents.send('play', { ...action, tuning: director.config.tuning, token: ++lastClipToken, url: mediaUrl(clip.file),
       facing: clip.facing ?? 'right', direction: physics.direction, skin: clip.skin ?? 'uniform', endsClosed: clip.endsClosed,
+      startOffset: source === 'click' || source === 'click-combo' ? clip.startOffset : undefined,
       blink: transition && {
         uniform: { url: mediaUrl(transition.uniform.file), closedAtSec: transition.uniform.closedAtSec },
         wafuku: transition.wafuku && { url: mediaUrl(transition.wafuku.file), closedAtSec: transition.wafuku.closedAtSec }
@@ -204,13 +206,9 @@ function finishPress(cursor: Electron.Point, now: number, cancelled: boolean): v
   if (release === 'long-press') {
     actionRequests.push({ source: 'long-press-release', cancelled });
   } else if (release === 'click' && !cancelled) {
-    // Count confirmed singles at release time, after the double-click window.
+    // The delay only keeps a double-click from opening chat.
     clickTimer = setTimeout(() => {
       clickTimer = undefined;
-      const combo = gestures.singleClick(now, director.config.triggers);
-      if (combo) actionRequests.push({ source: 'click-combo' });
-      else if (approached && gestures.allowStartle(now, director.config.interaction)) actionRequests.push({ source: 'click-startle' });
-      else actionRequests.push({ source: 'click' });
       if (director.rest === 'awake') toggleChat().catch(report.bind(null, 'chat-window'));
     }, director.config.tuning.doubleClickMs);
   } else if (director.current.kind === 'moves') {
@@ -257,21 +255,31 @@ function rollback(id: string): void {
   child.on('error', report.bind(null, 'rollback-launch'));
   child.on('exit', code => { if (code) report('Rollback helper launch failed: ' + code); });
 }
+async function preloadClicks(config: PetConfig): Promise<void> {
+  const files = new Set(config.animations.clicks.map(({ clip }) => config.clips[clip].file));
+  const results = await Promise.allSettled([...files].map(async file =>
+    [mediaUrl(file), await fs.readFile(path.join(media, file))]));
+  if (director.config === config && !pet.isDestroyed())
+    pet.webContents.send('click-media', results.flatMap(result => result.status === 'fulfilled' ? [result.value] : []));
+}
 function sendEffectsState(): void {
   if (!ready || pet.isDestroyed()) return;
-  const state: EffectsState = { enabled: settings.effectsEnabled, visible: pet.isVisible(), config: director.config.effects };
+  const config = director.config.effects;
+  const state: EffectsState = { enabled: settings.effectsEnabled, visible: pet.isVisible(),
+    config: { ...config, atmosphere: settings.atmosphere ?? config.atmosphere } };
   pet.webContents.send('effects-state', state);
 }
-function setSetting(key: keyof typeof settings, checked: boolean): void {
+function setSetting<K extends keyof typeof settings>(key: K, value: (typeof settings)[K]): void {
   try {
-    const next = { ...settings, [key]: checked };
+    const next = { ...settings, [key]: value };
     atomicWrite(settingsPath, JSON.stringify(next));
     settings = next;
-    if (key === 'effectsEnabled') sendEffectsState();
+    if (key !== 'clickSoundEnabled') sendEffectsState();
   } catch (error) { report('settings-write', error); }
   tray.setContextMenu(menu());
 }
 function menu(): Menu {
+  const atmospheres = { off: '关闭', glow: '浮光', snow: '落雪' } as const;
   return Menu.buildFromTemplate([
     { label: '和艾莉丝说话', click: () => { toggleChat().catch(report.bind(null, 'chat-window')); } },
     { label: director?.rest === 'awake' ? '睡一会儿' : '起来', click: () => {
@@ -280,6 +288,10 @@ function menu(): Menu {
     { label: '任务栏站立', type: 'checkbox', checked: standing, click: item => setStanding(item.checked) },
     { label: '点击音效', type: 'checkbox', checked: settings.clickSoundEnabled, click: item => setSetting('clickSoundEnabled', item.checked) },
     { label: '特效', type: 'checkbox', checked: settings.effectsEnabled, click: item => setSetting('effectsEnabled', item.checked) },
+    { label: '氛围粒子', submenu: (Object.keys(atmospheres) as Atmosphere[]).map(mode => ({
+      label: atmospheres[mode], type: 'radio', checked: mode === (settings.atmosphere ?? director.config.effects.atmosphere),
+      click: () => setSetting('atmosphere', mode)
+    })) },
     { label: '跳一下', click: () => { finishPress(screen.getCursorScreenPoint(), Date.now(), true); physics.mode = 'air'; physics.vy = -330; physics.vx = 0; } },
     { label: '回到原位', click: () => { finishPress(screen.getCursorScreenPoint(), Date.now(), true); physics.mode = 'idle'; physics.x = area().right - director.config.tuning.homeInsetPx; physics.y = area().floor; } },
     { label: pet?.isVisible() ? '隐藏桌宠' : '显示桌宠', click: () => pet.isVisible() ? pet.hide() : pet.showInactive() },
@@ -324,6 +336,8 @@ async function loadConfig(): Promise<void> {
   if (director) { director.replaceConfig(config); gestures.resetClicks(); actionRequests.push({ source: 'config-reload' }); }
   else director = new Director(config);
   sendEffectsState();
+  if (ready) void preloadClicks(config);
+  tray?.setContextMenu(menu());
   bridge.tuning = config.tuning;
   if (timers.length) startTimers();
   configStamp = (await fs.stat(configPath).catch(e => { if (e.code === 'ENOENT') return undefined; throw e; }))?.mtimeMs;
@@ -361,6 +375,8 @@ async function setup(): Promise<void> {
   try {
     const saved = await optionalJson('pet-settings.json');
     settings = { clickSoundEnabled: saved?.clickSoundEnabled !== false, effectsEnabled: saved?.effectsEnabled !== false };
+    if (saved?.atmosphere === 'off' || saved?.atmosphere === 'glow' || saved?.atmosphere === 'snow')
+      settings.atmosphere = saved.atmosphere;
   }
   catch (error) { report('settings-read', error); }
   runStats = new RunStats(statsPath);
@@ -386,7 +402,7 @@ async function setup(): Promise<void> {
   pet.setIgnoreMouseEvents(true, { forward: true });
   ipcMain.on('renderer-ready', event => {
     if (!trusted(event, pet)) return;
-    ready = true; sendEffectsState(); dispatch([{ source: 'startup' }]);
+    ready = true; sendEffectsState(); clickMediaReady = preloadClicks(director.config); dispatch([{ source: 'startup' }]);
   });
   ipcMain.on('chat-ready', event => { if (trusted(event, chat)) { chatReady = true; sendChat(); } });
   ipcMain.on('chat-close', event => { if (trusted(event, chat)) chat?.hide(); });
@@ -415,7 +431,13 @@ async function setup(): Promise<void> {
     if (runStats.recoveryPending) { day.recoveries++; runStats.recoveryPending = false; }
     persistStats();
     if (startupMs === null) await heartbeat();
-    if (startupMs === null) { startupMs = performance.now() - launchAt; if (!testMode) pet.showInactive(); }
+    if (startupMs === null) {
+      startupMs = performance.now() - launchAt;
+      if (!testMode) {
+        await clickMediaReady;
+        if (!pet.isDestroyed()) pet.showInactive();
+      }
+    }
     if (director.current.kind === 'moves' && physics.mode === 'idle') {
       const bounds = area(); physics.targetX = Math.max(bounds.left, Math.min(bounds.right, physics.x + physics.direction * (director.config.tuning.walkMinPx + Math.random() * director.config.tuning.walkExtraPx)));
       physics.mode = 'walk';
@@ -472,17 +494,20 @@ async function setup(): Promise<void> {
       press = new PointerPress(cursor, now, wakeOnly);
       interact({ source: 'pointer-wake' }, now);
       if (wakeOnly) return;
-      approached = gestures.press(now, director.config.interaction);
-      if (director.current.kind === 'peek') actionRequests.push({ source: 'click', dismissPeek: true });
+      const { interaction, triggers } = director.config;
+      const approached = gestures.press(now, interaction);
+      const combo = gestures.singleClick(now, triggers);
+      const source = combo ? 'click-combo' : approached && gestures.allowStartle(now, interaction) ? 'click-startle' : 'click';
       lastMovedAt = now;
       dragOffset = { x: cursor.x - physics.x, y: cursor.y - physics.y };
       physics.targetX = physics.x; physics.targetY = physics.y;
       physics.vx = physics.vy = 0; physics.mode = 'drag';
       director.beginHold(now);
+      dispatch([{ source }], now);
       pressTimer = setTimeout(() => {
         const at = Date.now();
         if (samplePress(screen.getCursorScreenPoint(), at)) dispatch(actionRequests.splice(0), at);
-      }, director.config.triggers.longPressMs);
+      }, triggers.longPressMs);
     } else if (type === 'up' || type === 'cancel') {
       finishPress(cursor, now, type === 'cancel');
     } else if (type === 'double') {

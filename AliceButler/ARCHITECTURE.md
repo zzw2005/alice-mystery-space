@@ -34,7 +34,7 @@ Electron 桌宠从 `electron/config.json` 的 `interaction` 读取交互阈值�
 | 悬空被拎 | 拖拽超过现有 4 px 起手距离。横向速度 1200 px/s 时倾角达 7° |
 | 落地坐倒 | 下降高度超过 95 px，或撞地垂直速度超过 590 px/s |
 | 张望与视线追逐 | 身体命中持续 800 ms，或在命中区横划速度达到 650 px/s。一次悬停触发一次，冷却 10 s |
-| 受惊 | 接近速度达到 1050 px/s 后 220 ms 内按下并完成单击。滚动 60 s 内限 3 次 |
+| 受惊 | 接近速度达到 1050 px/s 后 220 ms 内按下。滚动 60 s 内限 3 次 |
 | 回来挥手 | 锁屏或最小化超过 600 s，两者都解除后挥手一次。双击也可直接挥手 |
 
 Electron 剩余可调时间、手势阈值、聊天上限及播放参数集中在 `electron/config.json` 的 `tuning`。旧配置缺少的字段从内置默认值补齐。runner、watchdog 读取同目录的 `butler-config.json`，部署工具从源码目录读取其中的 `deployChecks`。逐项默认值、消费位置和生效时间见 [参数清单](../docs/electron-tuning-inventory.md)。

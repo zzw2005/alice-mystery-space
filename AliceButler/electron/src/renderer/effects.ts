@@ -49,7 +49,8 @@ export class EffectsLayer {
       this.gpu?.clear();
       return;
     }
-    const ambient: Ambient = this.clip === 'doze' ? 'dream' : this.state!.config.atmosphere;
+    const mode = this.state!.config.atmosphere;
+    const ambient: Ambient = mode !== 'off' && this.clip === 'doze' ? 'dream' : mode;
     if (this.gpu) {
       this.gpu.setAmbient(ambient);
       if (this.pending) this.gpu.emit(this.pending);

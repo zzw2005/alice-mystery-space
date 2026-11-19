@@ -12,6 +12,7 @@ let lastHit = false, facing = 'right', direction = 1, squash = 1, maskDirty = tr
 const labels = new Int32Array(640 * 360), floodQueue = new Int32Array(640 * 360);
 let body = 0;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+let pressStart: PointerEvent | undefined, rebound: Animation | undefined;
 function capture(): void {
   const video = player.video;
   if (!video || video.readyState < 2 || !maskDirty) return;
@@ -26,7 +27,17 @@ const player = new Player(videos, document.querySelector<HTMLCanvasElement>('#po
     effects.present(data.clip, data.token);
   }, () => { maskDirty = true; });
 let display: DisplayTuning;
-window.alice.onPlay(data => { display = data.tuning; void player.play(data); });
+let clickMedia = new Map<string, string>();
+window.alice.onClickMedia(files => {
+  const next = new Map(files.map(([url, bytes]) => [url, URL.createObjectURL(new Blob([bytes], { type: 'video/webm' }))]));
+  for (const url of clickMedia.values()) URL.revokeObjectURL(url);
+  clickMedia = next;
+});
+window.alice.onPlay(data => {
+  display = data.tuning;
+  const preloaded = data.kind === 'clicks' && clickMedia.get(data.url);
+  void player.play(preloaded ? { ...data, url: preloaded } : data);
+});
 window.alice.onEffectsState(state => effects.configure(state));
 const clickSound = new Audio('../media/click-duck.wav');
 window.alice.onClickSound(() => {
@@ -55,11 +66,36 @@ window.alice.onPose(pose => {
 });
 actor.addEventListener('pointerdown', event => {
   if (event.button !== 0 || !lastHit) return;
-  actor.classList.add('pressed'); actor.setPointerCapture(event.pointerId); window.alice.pointer('down');
+  pressStart = event;
+  rebound?.cancel();
+  if (!reducedMotion.matches)
+    rebound = actor.animate([{ scale: '1.06 .82' }, { scale: '1' }],
+      { duration: 200, easing: 'cubic-bezier(.175, .885, .32, 1.275)' });
+  actor.setPointerCapture(event.pointerId);
+  window.alice.pointer('down');
 });
-actor.addEventListener('pointerup', event => { if (event.button === 0) { actor.classList.remove('pressed'); window.alice.pointer('up'); if (actor.hasPointerCapture(event.pointerId)) actor.releasePointerCapture(event.pointerId); } });
-actor.addEventListener('lostpointercapture', () => actor.classList.remove('pressed'));
-actor.addEventListener('pointercancel', () => { actor.classList.remove('pressed'); window.alice.pointer('cancel'); });
+actor.addEventListener('pointermove', event => {
+  if (pressStart?.pointerId === event.pointerId &&
+      Math.abs(event.screenX - pressStart.screenX) + Math.abs(event.screenY - pressStart.screenY) > display.dragDistancePx) {
+    rebound?.cancel();
+    pressStart = undefined;
+  }
+});
+actor.addEventListener('pointerup', event => {
+  if (event.button !== 0) return;
+  pressStart = undefined;
+  window.alice.pointer('up');
+  if (actor.hasPointerCapture(event.pointerId)) actor.releasePointerCapture(event.pointerId);
+});
+actor.addEventListener('lostpointercapture', () => {
+  if (pressStart) rebound?.cancel();
+  pressStart = undefined;
+});
+actor.addEventListener('pointercancel', () => {
+  pressStart = undefined;
+  rebound?.cancel();
+  window.alice.pointer('cancel');
+});
 actor.addEventListener('dblclick', () => window.alice.pointer('double'));
 actor.addEventListener('contextmenu', event => { event.preventDefault(); if (lastHit) window.alice.pointer('menu'); });
 const bubble = document.querySelector<HTMLElement>('#bubble')!;

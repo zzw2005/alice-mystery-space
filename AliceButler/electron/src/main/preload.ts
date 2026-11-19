@@ -7,6 +7,7 @@ const subscribe = (channel: string, callback: (data: unknown) => void) => {
 contextBridge.exposeInMainWorld('alice', {
   ready: (kind: 'pet' | 'chat') => ipcRenderer.send(kind === 'pet' ? 'renderer-ready' : 'chat-ready'),
   onPlay: (callback: (data: unknown) => void) => subscribe('play', callback),
+  onClickMedia: (callback: (data: unknown) => void) => subscribe('click-media', callback),
   onClickSound: (callback: () => void) => subscribe('click-sound', callback),
   onEffectsState: (callback: (data: unknown) => void) => subscribe('effects-state', callback),
   onReclaim: (callback: () => void) => subscribe("reclaim", callback),

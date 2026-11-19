@@ -1,12 +1,14 @@
 interface DisplayTuning {
   loopCoverMs: number;
   hitAlpha: number;
+  dragDistancePx: number;
   bubbleMs: number; frameReportMs: number; firstFrameMs: number; fadeMs: number;
   maxMessageChars: number; chatScrollPx: number;
 }
 interface AliceAPI {
   ready(kind: 'pet' | 'chat'): void;
   onPlay(cb: (data: import('./player').PlayRequest) => void): () => void;
+  onClickMedia(cb: (data: [string, Uint8Array<ArrayBuffer>][]) => void): () => void;
   onClickSound(cb: () => void): () => void;
   onEffectsState(cb: (data: import('../shared/effects').EffectsState) => void): () => void;
   onReclaimDone(cb: () => void): void;

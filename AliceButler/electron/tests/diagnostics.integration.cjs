@@ -40,6 +40,9 @@ test('chat, malformed config and failed probes leave no seed in diagnostics', as
   try {
     const pet = await app.firstWindow();
     await pet.waitForFunction(() => document.querySelector('#actor').dataset.clip === 'idle');
+    for (const end = Date.now() + 5000; Date.now() < end && !await app.evaluate(() => !!global.aliceTest); )
+      await delay(50);
+    assert.ok(await app.evaluate(() => !!global.aliceTest), 'main-process test hooks are ready');
     await app.evaluate(async () => { await global.aliceTest.openChat(); });
     const chat = app.windows().find(page => page.url().endsWith('chat.html'));
     const id = await chat.evaluate(text => window.alice.send(text), payload);

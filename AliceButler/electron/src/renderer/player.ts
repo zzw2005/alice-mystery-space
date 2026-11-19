@@ -2,7 +2,7 @@ type Skin = 'uniform' | 'wafuku';
 type Blink = { url: string; closedAtSec: number };
 export type PlayRequest = {
   tuning: DisplayTuning; clip: string; kind: string; loop: boolean; rate: number; token: number;
-  url: string; facing: string; direction: number; skin: Skin; endsClosed?: boolean;
+  url: string; facing: string; direction: number; skin: Skin; endsClosed?: boolean; startOffset?: number;
   blink?: { uniform: Blink; wafuku?: Blink }; interactive?: boolean;
 };
 const REASON_SUPERSEDED = 'superseded';
@@ -156,7 +156,8 @@ export class Player {
       if (!reclaim && !this.suspended && this.video && from && from !== data.skin)
         await this.changeSkin(from, data, swap);
       if (!this.isCurrent(swap)) return;
-      const shown = await this.swap(data, swap, { reclaim, cut: this.request?.skin !== data.skin });
+      const shown = await this.swap(data, swap, { reclaim, cut: this.request?.skin !== data.skin,
+        offset: reclaim ? undefined : data.startOffset });
       if (!shown && this.isCurrent(swap)) window.alice.videoError('first-frame', reclaim ? undefined : data.token);
     } finally {
       if (this.pending === swap) this.pending = undefined;

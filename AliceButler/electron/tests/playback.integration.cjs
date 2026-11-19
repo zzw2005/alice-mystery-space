@@ -9,7 +9,7 @@ const delay = ms => new Promise(r => setTimeout(r, ms));
   const effects = process.env.ALICE_TEST_EFFECTS_MODE;
   if (effects) {
     assert.ok(['on', 'off'].includes(effects));
-    await fs.writeFile(path.join(root, 'pet-settings.json'), JSON.stringify({ effectsEnabled: effects === 'on' }));
+    await fs.writeFile(path.join(root, 'pet-settings.json'), JSON.stringify({ effectsEnabled: effects === 'on', atmosphere: 'glow' }));
   }
   const app = await _electron.launch({ executablePath: require('electron'),
     args: [...(process.env.ALICE_TEST_NO_SANDBOX === '1' ? ['--no-sandbox'] : []),

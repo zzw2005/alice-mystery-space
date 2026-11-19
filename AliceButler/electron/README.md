@@ -33,9 +33,11 @@ node tests/deployed-nine-clip-smoke.cjs
 
 透明 alpha 读取只用于命中，不把视频改成散帧播放；指针离开窗口或拖拽期间跳过像素读取与连通域计算。透明区与脚下阴影穿透；角色可抓。DIP 坐标跟随 Electron DPI，镜像/挤压使用同一逆变换命中。拖拽使用解析临界阻尼弹簧，慢帧下也不发生数值发散。
 
+命中角色后，按下左键立即压扁并在 200 ms 内回弹。再次按下可重新触发，超过拖拽起手距离时取消回弹。点击池媒体在启动时预加载，按下即请求反应，并从各段的 `startOffset`（秒）开始。同皮肤点击直接进入反应，跨皮肤点击仍经过闭眼换装。双击挥手，松手后的双击判定窗口只影响聊天的打开时机。
+
 ## 特效
 
-右键与托盘菜单中的「特效」默认开启，开关保存在运行根目录的 `pet-settings.json`。`effects.atmosphere` 支持 `glow`（默认）、`snow` 和 `off`。播放 `doze` 时使用低密度梦境微光。`effects.actions` 按动作名设置 `type`、`anchor` 和 0–1 的 `intensity`，在动作首帧呈现时触发。锚点 `head`、`front`、`sides` 以舞台横向 51%、脚底 85% 为基准。
+右键与托盘菜单的「特效」总开关默认开启。「氛围粒子」可选择关闭、浮光或落雪，首次使用配置值 `effects.atmosphere`（默认 `off`）。开启氛围后，`doze` 使用低密度梦境微光。菜单选项保存到运行根目录的 `pet-settings.json`。`effects.actions` 按动作名设置 `type`、`anchor` 和 0–1 的 `intensity`，在动作首帧呈现时触发。锚点 `head`、`front`、`sides` 以舞台横向 51%、脚底 85% 为基准。
 
 透明 PixiJS 画布在首次需要特效时创建，使用 WebGL2 实例绘制。全层最多 120 个粒子，最高渲染倍率 1.5。氛围以 12 FPS 为目标，反应特效以 20 FPS 为目标。粒子清空或桌宠隐藏时停止绘制，关闭总开关时释放画布及渲染资源。
 
@@ -44,6 +46,8 @@ node tests/deployed-nine-clip-smoke.cjs
 ## 优化验收（只在开发副本运行）
 
 `npm test` 检查类型、动作/物理与文件桥；`npm run test:electron` 验证已配置动作、透明通道、睡眠与聊天回归；`npm run test:playback` 验证切换、快速抢占、画面连续性、解码器释放和恢复。全部使用隔离 `ALICE_PET_ROOT`。测试额外指定独立 user-data-dir，避免与生产或另一开发实例竞争单实例锁。测试环境如需 `ALICE_TEST_NO_SANDBOX=1`，仅测试启动器会带 `--no-sandbox`，产品启动不改变沙盒。
+
+构建后运行 `node --test tests/interaction.integration.cjs` 验证按压、拖拽、换装和点击首帧。
 
 `ALICE_PLAYBACK_SOAK=1 npm run test:playback` 等待真实两分钟睡眠阈值；默认通过老化测试时间戳验证同一个维护定时器。隐藏路径也测试同一阈值与恢复。测试采样 actor 的 160×90 合成画面来检测黑帧/透明空帧，不代替 Windows 上的可见画面验收。
 

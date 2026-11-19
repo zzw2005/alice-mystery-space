@@ -16,13 +16,16 @@
       "file": "wakeup.webm"
     },
     "clickhappy": {
-      "file": "clickhappy.webm"
+      "file": "clickhappy.webm",
+      "startOffset": 0.5
     },
     "clickshy": {
-      "file": "clickshy.webm"
+      "file": "clickshy.webm",
+      "startOffset": 1
     },
     "clicktsun": {
-      "file": "clicktsun.webm"
+      "file": "clicktsun.webm",
+      "startOffset": 0.917
     },
     "dangle": {
       "file": "dangle.webm"
@@ -38,7 +41,8 @@
       "file": "startled.webm"
     },
     "knock": {
-      "file": "knock.webm"
+      "file": "knock.webm",
+      "startOffset": 1.875
     },
     "coding": {
       "file": "coding.webm"
@@ -48,7 +52,8 @@
       "skin": "wafuku"
     },
     "hmph": {
-      "file": "hmph.webm"
+      "file": "hmph.webm",
+      "startOffset": 3.125
     },
     "guard": {
       "file": "guard.webm",
@@ -87,7 +92,8 @@
       "skin": "wafuku"
     },
     "rage": {
-      "file": "rage.webm"
+      "file": "rage.webm",
+      "startOffset": 1.25
     },
     "afterimage": {
       "file": "afterimage.webm",
@@ -423,7 +429,7 @@
       "maxReplyBytes": "单个回复文件读取上限",
       "maxMessageChars": "单次发送文本长度上限",
       "clickHoldMs": "单击按住时长上限",
-      "doubleClickMs": "单击等待双击的时间",
+      "doubleClickMs": "抬起后等候双击以决定是否打开聊天",
       "dragDistancePx": "拖动起手与活动判定距离",
       "releaseStaleMs": "停止移动后清零抛掷速度的等待时间",
       "walkMinPx": "单次散步基础距离",
@@ -474,7 +480,7 @@
     }
   },
   "effects": {
-    "atmosphere": "glow",
+    "atmosphere": "off",
     "actions": {
       "clickhappy": {
         "type": "stars",

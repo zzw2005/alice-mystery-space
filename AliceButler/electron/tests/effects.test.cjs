@@ -4,8 +4,7 @@ const config = require('../config.json');
 const { validateConfig } = require('../dist/main/engine');
 
 test('effects config supports both atmospheres and preserves the five action mappings', () => {
-  const { atmosphere, actions } = validateConfig(config).effects;
-  assert.equal(atmosphere, 'glow');
+  const { actions } = validateConfig(config).effects;
   assert.deepEqual(Object.fromEntries(Object.entries(actions).map(([clip, { type, anchor }]) => [clip, [type, anchor]])), {
     clickhappy: ['stars', 'head'], laugh: ['stars', 'head'], clickshy: ['petals', 'head'],
     rage: ['steam', 'sides'], knock: ['impact', 'front']
@@ -17,6 +16,11 @@ test('effects config supports both atmospheres and preserves the five action map
   delete legacy.effects;
   assert.equal(validateConfig(legacy).effects.atmosphere, 'off');
   assert.deepEqual(Object.keys(validateConfig(legacy).effects.actions), []);
+});
+
+test('both shipped configs default to no atmosphere', () => {
+  for (const preset of [config, require('../defaults.json')])
+    assert.equal(validateConfig(preset).effects.atmosphere, 'off');
 });
 
 test('effects config rejects unknown anchors, clips, types and unsafe intensity', () => {
