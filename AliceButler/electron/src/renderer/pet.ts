@@ -5,7 +5,8 @@ import { EffectsLayer } from './effects.js';
 const videos = Array.from(document.querySelectorAll('video'));
 const actor = document.querySelector<HTMLElement>('#actor')!;
 const shadow = document.querySelector<HTMLElement>('#shadow')!;
-const effects = new EffectsLayer(document.querySelector<HTMLElement>('#effects')!);
+const effects = new EffectsLayer(document.querySelector<HTMLElement>('#effects')!,
+  document.querySelector<HTMLElement>('#pixelfx')!);
 const mask = document.createElement('canvas'); mask.width = 640; mask.height = 360;
 const context = mask.getContext('2d', { willReadFrequently: true })!;
 let lastHit = false, facing = 'right', direction = 1, squash = 1, maskDirty = true;

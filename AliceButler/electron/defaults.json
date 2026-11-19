@@ -404,13 +404,15 @@
     "atmosphere": "off",
     "actions": {
       "clickhappy": {
-        "type": "stars",
+        "type": "pixelfx",
+        "fx": "collect-burst",
         "anchor": "head",
         "intensity": 0.85
       },
       "laugh": {
-        "type": "stars",
-        "anchor": "head",
+        "type": "pixelfx",
+        "fx": "confetti",
+        "anchor": "front",
         "intensity": 0.65
       },
       "clickshy": {

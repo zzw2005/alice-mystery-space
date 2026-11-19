@@ -218,6 +218,7 @@ export class GpuEffects {
   emit(effect: ActionEffect): void {
     if (effect.intensity <= 0) return;
     const { type, intensity } = effect;
+    if (type === 'pixelfx') return; // pixelfx actions are routed to the pixel layer
     const burst = bursts[type];
     const seconds = (performance.now() - this.createdAt) / 1000;
     if (type === 'steam') {

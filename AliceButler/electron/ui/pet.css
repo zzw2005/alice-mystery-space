@@ -5,6 +5,6 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent
 #actor{isolation:isolate}#actor video{mix-blend-mode:plus-lighter}
 /* Keep the reusable CPU frame visible while Chromium evicts video textures. */
 #actor[data-reclaim] #poster{opacity:1!important;z-index:3!important}
-#effects{position:absolute;inset:0;z-index:1;pointer-events:none;contain:paint}
-#effects canvas{display:block;width:100%;height:100%}
+#effects,#pixelfx{position:absolute;inset:0;z-index:1;pointer-events:none;contain:paint}
+#effects canvas,#pixelfx canvas{display:block;width:100%;height:100%}
 #bubble{z-index:2}

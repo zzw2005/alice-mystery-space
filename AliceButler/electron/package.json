@@ -5,7 +5,7 @@
   "description": "Alice desktop pet; file protocol compatible with AliceButler",
   "main": "dist/main/main.js",
   "scripts": {
-    "build": "tsc -p tsconfig.main.json && tsc -p tsconfig.renderer.json && esbuild src/main/chat-relay.ts --bundle --platform=node --target=node24 --external:bufferutil --external:utf-8-validate --outfile=dist/main/chat-relay.js && esbuild src/renderer/effects-gpu.ts --bundle --format=esm --target=es2022 --minify --outfile=dist/renderer/effects-gpu.js",
+    "build": "tsc -p tsconfig.main.json && tsc -p tsconfig.renderer.json && esbuild src/main/chat-relay.ts --bundle --platform=node --target=node24 --external:bufferutil --external:utf-8-validate --outfile=dist/main/chat-relay.js && esbuild src/renderer/effects-gpu.ts --bundle --format=esm --target=es2022 --minify --outfile=dist/renderer/effects-gpu.js && esbuild src/renderer/pixel/pixel-layer.js --bundle --format=esm --target=es2022 --minify --outfile=dist/renderer/effects-pixel.js",
     "test": "npm run build && node --test tests/*.test.cjs",
     "start": "npm run build && electron .",
     "package": "npm run build && node scripts/package.mjs",
