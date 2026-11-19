@@ -63,14 +63,11 @@ test('config validates all referenced clips and rejects unsafe paths/weights', (
   broken.clips.idle.file = 'idle.webm'; broken.animations.idle[0].weight = NaN;
   assert.throws(() => validateConfig(broken));
 });
-test('final config has no skin transition; a legacy blink format still validates', () => {
+test('final config has no skin transition; a legacy one is dropped, not validated', () => {
   assert.equal(config.skinTransition, undefined);
   assert.equal(validateConfig(config).skinTransition, undefined);
-  const uniform = { file: 'blink-uniform.webm', closedAtSec: 2.5 };
-  assert.deepEqual(validateConfig({ ...config, skinTransition: uniform }).skinTransition, { uniform });
-  for (const blink of [{ ...uniform, file: '../blink.webm' }, { ...uniform, closedAtSec: 3 }]) {
-    assert.throws(() => validateConfig({ ...config, skinTransition: blink }), /Invalid skin transition/);
-  }
+  const legacy = { ...config, skinTransition: { file: 'blink-uniform.webm', closedAtSec: 2.5 } };
+  assert.equal(validateConfig(legacy).skinTransition, undefined);
 });
 test('weighted picker excludes last item, including with deterministic randomness', () => {
   const director = new Director(config, () => 0);

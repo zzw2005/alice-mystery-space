@@ -22,15 +22,6 @@ def main():
     limits.update({('sleepstart', 'doze'): .132886, ('doze', 'wakeup'): .132886, ('wakeup', 'idle'): 1.316981})
     if args.sleep_only:
         clips = {name: clips[name] for pair in limits for name in pair}
-    else:
-        transitions = config.get('skinTransition') or {}
-        if 'file' in transitions:
-            transitions = {'uniform': transitions}
-        for skin in ('uniform', 'wafuku'):
-            if skin in transitions:
-                name = f'skinTransition.{skin}'
-                clips[name] = transitions[skin]
-                limits[name, name] = 0
     if args.audit:
         pipeline = runpy.run_path(str(Path(__file__).with_name('process-green.py')))
     ends, boxes = {}, {}

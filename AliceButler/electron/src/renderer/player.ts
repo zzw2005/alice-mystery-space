@@ -1,12 +1,9 @@
-type Skin = 'uniform' | 'wafuku';
-type Blink = { url: string; closedAtSec: number };
 export type PlayRequest = {
   tuning: DisplayTuning; clip: string; kind: string; loop: boolean; rate: number; token: number;
-  url: string; facing: string; direction: number; skin: Skin; endsClosed?: boolean; startOffset?: number;
-  blink?: { uniform: Blink; wafuku?: Blink }; interactive?: boolean;
+  url: string; facing: string; direction: number; startOffset?: number;
+  interactive?: boolean;
 };
 const REASON_SUPERSEDED = 'superseded';
-const BLINK_QUICK_RATE = 3;
 type Swap = { gen: number; controller: AbortController; token?: number };
 type SwapOptions = { reclaim?: boolean; transition?: boolean; cut?: boolean; offset?: number };
 
@@ -152,69 +149,15 @@ export class Player {
     }
 
     try {
-      const from = this.request?.skin;
-      if (!reclaim && !this.suspended && this.video && from && from !== data.skin)
-        await this.changeSkin(from, data, swap);
-      if (!this.isCurrent(swap)) return;
-      const shown = await this.swap(data, swap, { reclaim, cut: this.request?.skin !== data.skin,
+      const shown = await this.swap(data, swap, { reclaim,
         offset: reclaim ? undefined : data.startOffset });
       if (!shown && this.isCurrent(swap)) window.alice.videoError('first-frame', reclaim ? undefined : data.token);
     } finally {
       if (this.pending === swap) this.pending = undefined;
     }
   }
-  private async changeSkin(from: Skin, data: PlayRequest, swap: Swap): Promise<void> {
-    const closing = data.blink?.[from], opening = data.blink?.[data.skin];
-    const blink = { ...data, loop: false, endsClosed: false };
-    const alreadyClosed = this.video?.ended && this.request?.endsClosed;
-    if (closing && !alreadyClosed) {
-      const shown = await this.swap({
-        ...blink, url: closing.url, skin: from, rate: data.interactive ? BLINK_QUICK_RATE : 1
-      }, swap, { transition: true });
-      const closed = shown && await this.waitForBlink(swap, closing.closedAtSec);
-      if (!closed && this.isCurrent(swap)) window.alice.videoError('skin-transition');
-    }
-    if (!opening || !this.isCurrent(swap)) return;
-    // Both 10s assets have a closed frame at 2.5s. Play the remaining 7.5s
-    // in 2.5s to keep a full close/reopen sequence around five seconds.
-    const shown = await this.swap({ ...blink, url: opening.url, rate: BLINK_QUICK_RATE }, swap, {
-      transition: true, cut: true, offset: opening.closedAtSec
-    });
-    if (!this.isCurrent(swap)) return;
-    if (shown && data.interactive) {
-      this.video?.pause();
-      return;
-    }
-    if (!(shown && await this.waitForBlink(swap)) && this.isCurrent(swap))
-      window.alice.videoError('skin-transition');
-  }
   private isCurrent(swap: Swap): boolean {
     return swap.gen === this.swapGen && !swap.controller.signal.aborted;
-  }
-  private waitForBlink(swap: Swap, closeAt?: number): Promise<boolean> {
-    const video = this.video, request = this.request;
-    if (!video || !request || !this.isCurrent(swap)) return Promise.resolve(false);
-    const { signal } = swap.controller;
-    return new Promise(resolve => {
-      let frameId = 0;
-      const finish = (completed: boolean) => {
-        clearTimeout(timeout); video.cancelVideoFrameCallback(frameId);
-        video.removeEventListener('ended', ended); video.removeEventListener('error', failed);
-        signal.removeEventListener('abort', failed); resolve(completed);
-      };
-      const ended = () => finish(closeAt === undefined);
-      const failed = () => finish(false);
-      const timeout = window.setTimeout(failed, request.tuning.firstFrameMs);
-      video.addEventListener('ended', ended); video.addEventListener('error', failed);
-      signal.addEventListener('abort', failed, { once: true });
-      if (closeAt !== undefined) {
-        const watch: VideoFrameRequestCallback = (_now, frame) => {
-          if (frame.mediaTime < closeAt) { frameId = video.requestVideoFrameCallback(watch); return; }
-          video.pause(); finish(true);
-        };
-        frameId = video.requestVideoFrameCallback(watch);
-      }
-    });
   }
   private async swap(data: PlayRequest, swap: Swap, options: SwapOptions): Promise<boolean> {
     const { signal } = swap.controller;

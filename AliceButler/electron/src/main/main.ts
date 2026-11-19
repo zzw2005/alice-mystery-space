@@ -127,16 +127,11 @@ function dispatch(requests: readonly ActionRequest[], now = Date.now()): void {
     // Keep a hidden pet parked; waking a visible sleeping pet resumes immediately.
     if (suspended && hiddenByUser) return;
     const clip = director.config.clips[action.clip];
-    const transition = director.config.skinTransition;
     suspended = false; parkPending = false;
     videoReady = false;
     pet.webContents.send('play', { ...action, tuning: director.config.tuning, token: ++lastClipToken, url: mediaUrl(clip.file),
-      facing: clip.facing ?? 'right', direction: physics.direction, skin: clip.skin ?? 'uniform', endsClosed: clip.endsClosed,
+      facing: clip.facing ?? 'right', direction: physics.direction,
       startOffset: source === 'click' || source === 'click-combo' ? clip.startOffset : undefined,
-      blink: transition && {
-        uniform: { url: mediaUrl(transition.uniform.file), closedAtSec: transition.uniform.closedAtSec },
-        wafuku: transition.wafuku && { url: mediaUrl(transition.wafuku.file), closedAtSec: transition.wafuku.closedAtSec }
-      },
       interactive: ['click', 'click-combo', 'click-startle', 'double-click', 'drag', 'long-press', 'landing'].includes(source) });
   }
 }
@@ -284,25 +279,21 @@ const actionLabels = new Map(Object.entries({
   wave: '挥手', peek: '张望', startled: '受惊', sitdown: '摔坐',
   clickhappy: '开心', clickshy: '害羞', clicktsun: '傲娇', knock: '敲击', hmph: '抱臂哼', rage: '大小姐被惹怒',
   coding: '敲代码', stretch: '伸懒腰', meat: '吃肉', laugh: '大笑', sweat: '擦汗',
-  sword: '练剑', guard: '警戒', sharpen: '磨剑', ruins: '拔剑连斩', swordweb: '剑光成网',
-  giantslash: '蓄力上斩', nightwatch: '守夜', afterimage: '残影连斩', rainstand: '雨中伫立'
+  rainstand: '雨中伫立'
 }));
 function menu(): Menu {
   const atmospheres = { off: '关闭', glow: '浮光', snow: '落雪' } as const;
   const clips = director.manualClips;
-  const actionGroups = (['uniform', 'wafuku'] as const).map(skin => ({
-    label: skin === 'uniform' ? '制服' : '和风',
-    submenu: clips.filter(clip => (director.config.clips[clip].skin ?? 'uniform') === skin).map(clip => ({
-      label: actionLabels.get(clip) ?? clip,
-      click: () => {
-        if (!pet.isVisible()) pet.showInactive();
-        interact({ source: 'menu-action', clip });
-      }
-    }))
-  })).filter(group => group.submenu.length > 0);
+  const actionItems = clips.map(clip => ({
+    label: actionLabels.get(clip) ?? clip,
+    click: () => {
+      if (!pet.isVisible()) pet.showInactive();
+      interact({ source: 'menu-action', clip });
+    }
+  }));
   return Menu.buildFromTemplate([
     { label: '和艾莉丝说话', click: () => { toggleChat().catch(report.bind(null, 'chat-window')); } },
-    { label: '选择动作', enabled: director.rest === 'awake' && clips.length > 0, submenu: actionGroups },
+    { label: '选择动作', enabled: director.rest === 'awake' && clips.length > 0, submenu: actionItems },
     { label: director?.rest === 'awake' ? '睡一会儿' : '起来', click: () => {
       interact({ source: director.rest === 'awake' ? 'menu-sleep' : 'menu-wake' });
     } },
@@ -489,7 +480,7 @@ async function setup(): Promise<void> {
   });
   ipcMain.on('video-error', (event, message: unknown, token?: number) => {
     if (!trusted(event, pet)) return;
-    const reason = message === 'poster' || message === 'first-frame' || message === 'skin-transition' ? message : 'decode';
+    const reason = message === 'poster' || message === 'first-frame' ? message : 'decode';
     report('video-' + reason);
     if (token === lastClipToken) {
       dispatch([{ source: 'media-fallback' }]);
