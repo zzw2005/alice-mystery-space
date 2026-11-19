@@ -32,3 +32,8 @@
 ## 事件游标
 
 status.json 的 events 带 seq 与 runnerSince；桌宠以 (runnerSince, seq) 复合语义对齐，runner 重启后游标自动重置，不误报旧完成、不吞新完成。
+
+## 中继快路径（2026-11-19 加，细节见 relay/README.md）
+
+- inbox/ 与 outbox/ 的文件协议不变；新增 relay-client.js（管家 service）把 inbox 新消息经服务器中继（WSS＋端到端加密）即时推给艾莉丝，收到 ack 后把原件移入 inbox/seen/（与钩子消费的终态一致）。中继不可达时文件留 inbox/，旧钩子 SSH 拉取自动接管。
+- outbox/ 回复多一条来源：relay-client 收到中继回复后按同样的临时名→rename 规范落 reply-<id>.json 并回 ack；桌宠消费逻辑与去重不变。
